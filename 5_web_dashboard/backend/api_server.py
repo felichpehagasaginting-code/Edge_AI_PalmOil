@@ -32,7 +32,7 @@ import asyncpg
 from fastapi import FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
 
-# ── Logging ────────────────────────────────────────────────────────────────────
+# ── Logging ──────────────────────────────────────────────────────────────────
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s [%(levelname)-8s] %(name)s: %(message)s",
@@ -40,18 +40,19 @@ logging.basicConfig(
 )
 logger = logging.getLogger("dashboard_api")
 
-# ── Configuration from environment ────────────────────────────────────────────
-DB_HOST     = os.getenv("DB_HOST",     "timescaledb")
-DB_PORT     = int(os.getenv("DB_PORT", "5432"))
-DB_NAME     = os.getenv("DB_NAME",     "grading_db")
-DB_USER     = os.getenv("DB_USER",     "tbs_user")
+# ── Configuration from environment ──────────────────────────────────────────
+DB_HOST = os.getenv("DB_HOST", "timescaledb")
+DB_PORT = int(os.getenv("DB_PORT", "5432"))
+DB_NAME = os.getenv("DB_NAME", "grading_db")
+DB_USER = os.getenv("DB_USER", "tbs_user")
 DB_PASSWORD = os.getenv("DB_PASSWORD", "secure_db_pass_123")
 
 # asyncpg connection pool (min 2, max 10)
 DB_POOL_MIN = 2
 DB_POOL_MAX = 10
 
-# ── Application lifespan (startup / shutdown) ──────────────────────────────────
+# ── Application lifespan (startup / shutdown) ────────────────────────────────
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncIterator[None]:
@@ -60,7 +61,10 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         f"postgresql://{DB_USER}:{DB_PASSWORD}"
         f"@{DB_HOST}:{DB_PORT}/{DB_NAME}"
     )
-    logger.info(f"Connecting to TimescaleDB at {DB_HOST}:{DB_PORT}/{DB_NAME}...")
+    logger.info(
+        "Connecting to TimescaleDB at %s:%d/%s...",
+        DB_HOST, DB_PORT, DB_NAME
+    )
     try:
         app.state.pool = await asyncpg.create_pool(
             dsn=dsn,
@@ -70,7 +74,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         )
         logger.info("Database connection pool ready.")
     except Exception as exc:
-        logger.error(f"Database pool creation failed: {exc}")
+        logger.error("Database pool creation failed: %s", exc)
         raise
 
     yield  # App is running here
@@ -79,7 +83,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     logger.info("Database pool closed.")
 
 
-# ── FastAPI app ────────────────────────────────────────────────────────────────
+# ── FastAPI app ──────────────────────────────────────────────────────────────
 app = FastAPI(
     title="TBS Grading Dashboard API",
     description="REST API for the Edge AI Palm Oil FFB Grading Dashboard",
@@ -95,7 +99,8 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# ── Helper ─────────────────────────────────────────────────────────────────────
+# ── Helper ───────────────────────────────────────────────────────────────────
+
 
 async def _query(sql: str, *args: Any) -> list[dict]:
     """Execute a SELECT query and return a list of row dicts."""
@@ -104,7 +109,7 @@ async def _query(sql: str, *args: Any) -> list[dict]:
             rows = await conn.fetch(sql, *args)
             return [dict(row) for row in rows]
     except asyncpg.PostgresError as exc:
-        logger.error(f"DB query failed: {exc}\nSQL: {sql[:200]}")
+        logger.error("DB query failed: %s\nSQL: %s", exc, sql[:200])
         raise HTTPException(status_code=503, detail="Database query failed")
 
 
@@ -115,11 +120,11 @@ async def _query_one(sql: str, *args: Any) -> dict | None:
             row = await conn.fetchrow(sql, *args)
             return dict(row) if row else None
     except asyncpg.PostgresError as exc:
-        logger.error(f"DB query_one failed: {exc}\nSQL: {sql[:200]}")
+        logger.error("DB query_one failed: %s\nSQL: %s", exc, sql[:200])
         raise HTTPException(status_code=503, detail="Database query failed")
 
 
-# ── Endpoints ──────────────────────────────────────────────────────────────────
+# ── Endpoints ────────────────────────────────────────────────────────────────
 
 @app.get("/health")
 async def health_check() -> dict:
@@ -176,7 +181,9 @@ async def stats_today() -> dict:
 
 @app.get("/api/events/recent")
 async def events_recent(
-    limit: int = Query(default=50, ge=1, le=200, description="Max rows to return"),
+    limit: int = Query(
+        default=50, ge=1, le=200, description="Max rows to return"
+    ),
 ) -> list[dict]:
     """
     Latest N scan events for the live feed table.
@@ -208,7 +215,9 @@ async def events_recent(
 
 @app.get("/api/trend/throughput")
 async def trend_throughput(
-    minutes: int = Query(default=30, ge=5, le=1440, description="Rolling window in minutes"),
+    minutes: int = Query(
+        default=30, ge=5, le=1440, description="Rolling window in minutes"
+    ),
 ) -> list[dict]:
     """
     Bunches-per-minute throughput for the last N minutes (1-min buckets).
@@ -234,7 +243,9 @@ async def trend_throughput(
 
 @app.get("/api/trend/grades")
 async def trend_grades(
-    hours: int = Query(default=24, ge=1, le=168, description="Hours of history"),
+    hours: int = Query(
+        default=24, ge=1, le=168, description="Hours of history"
+    ),
 ) -> list[dict]:
     """
     Hourly grade count breakdown for the last N hours.
@@ -287,7 +298,7 @@ async def gateway_status() -> dict:
     if row.get("event_time"):
         row["event_time"] = row["event_time"].isoformat()
     # Flag if last heartbeat is stale (> 90 seconds)
-    from datetime import datetime, timezone, timedelta
+    from datetime import datetime, timezone
     if row.get("event_time"):
         last_seen = datetime.fromisoformat(row["event_time"])
         if last_seen.tzinfo is None:

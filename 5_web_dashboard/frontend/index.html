@@ -80,6 +80,15 @@
     </div>
 
     <span id="mqttStatusBar" class="status-badge badge-red pulse" aria-live="polite">Connecting…</span>
+    <!-- Mock/Real Data Switch -->
+    <div class="toggle-container" id="dataSourceToggleContainer" title="Toggle between Mock Simulation and Real Factory Data">
+      <span class="toggle-label">Data Source</span>
+      <label class="toggle-switch">
+        <input type="checkbox" id="modeDataToggle">
+        <span class="toggle-slider"></span>
+      </label>
+      <span id="modeDataStatus" class="toggle-status-text mode-mock">MOCK</span>
+    </div>
     <div id="liveClock" class="nav-clock" aria-live="off">--:--:--</div>
   </div>
 </nav>

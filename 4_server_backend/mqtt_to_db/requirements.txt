@@ -1,0 +1,16 @@
+###############################################################################
+# FILE: mqtt_to_db/requirements.txt
+# PROJECT: Edge AI Palm Oil FFB (TBS) Grading System — Server Backend
+# DESCRIPTION:
+#   Python dependency list for the mqtt_to_db daemon.
+#   Pinned to specific stable versions for reproducible production deployments.
+###############################################################################
+
+# MQTT client library — Eclipse Paho implementation for Python
+# https://pypi.org/project/paho-mqtt/
+paho-mqtt==1.6.1
+
+# PostgreSQL/TimescaleDB adapter
+# https://pypi.org/project/psycopg2-binary/
+# Note: psycopg2-binary includes compiled C extensions — no system libpq needed
+psycopg2-binary==2.9.9

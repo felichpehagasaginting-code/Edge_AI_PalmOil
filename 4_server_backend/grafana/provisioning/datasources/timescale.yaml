@@ -1,0 +1,46 @@
+################################################################################
+# FILE: grafana/provisioning/datasources/timescale.yaml
+# PROJECT: Edge AI Palm Oil FFB (TBS) Grading System — Server Backend
+# DESCRIPTION:
+#   Grafana provisioning file that automatically configures the TimescaleDB
+#   data source on first startup. No manual setup required.
+#
+#   TimescaleDB uses the standard PostgreSQL plugin for Grafana.
+#   All time-series queries work via standard SQL against the hypertables.
+################################################################################
+
+apiVersion: 1
+
+datasources:
+  - name: TimescaleDB_TBS
+    type: postgres
+    uid: timescaledb_tbs_001    # Unique ID for dashboard references
+
+    # Connection settings (must match docker-compose.yml timescaledb service)
+    url: timescaledb:5432       # hostname:port (service name on Docker network)
+    database: grading_db
+
+    # Authentication
+    user: tbs_user
+    secureJsonData:
+      password: secure_db_pass_123  # Match DB_PASSWORD in docker-compose.yml
+
+    # PostgreSQL-specific settings
+    jsonData:
+      sslmode:         disable      # No SSL on internal Docker network
+      postgresVersion: 1500         # PostgreSQL 15 (TimescaleDB latest-pg15)
+      timescaledb:     true         # Enable TimescaleDB-specific query optimizations
+
+      # Maximum number of connections from Grafana to TimescaleDB
+      maxOpenConns:    5
+      maxIdleConns:    2
+      connMaxLifetime: 14400        # 4 hours (seconds)
+
+    # Mark as default data source for new dashboards
+    isDefault: true
+
+    # Access mode: proxy = Grafana server queries DB (not browser-direct)
+    access: proxy
+
+    # Allow editing connection settings in the Grafana UI
+    editable: true

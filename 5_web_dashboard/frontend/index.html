@@ -1,0 +1,388 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="description" content="Real-time monitoring dashboard for Edge AI Palm Oil FFB (TBS) Grading System on MAX78000FTHR conveyor belt." />
+  <title>TBS Grading Monitor — Edge AI Dashboard</title>
+
+  <!-- Google Fonts: Inter -->
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+
+  <!-- Chart.js v4 -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js" defer></script>
+
+  <!-- Paho MQTT WebSocket client -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/paho-mqtt/1.0.3/mqttws31.min.js"></script>
+
+  <!-- Project styles -->
+  <link rel="stylesheet" href="css/dashboard.css" />
+</head>
+<body>
+
+<!-- ═══════════════════════════════════════════════════════════════════════
+     ANOMALY FLASH OVERLAY (full-screen red flash on alert)
+════════════════════════════════════════════════════════════════════════════ -->
+<div id="alertOverlay" aria-hidden="true"></div>
+
+<!-- ═══════════════════════════════════════════════════════════════════════
+     ANOMALY TOAST NOTIFICATION
+════════════════════════════════════════════════════════════════════════════ -->
+<div class="toast-container" role="alert" aria-live="assertive">
+  <div id="anomalyToast" class="toast-hidden">
+    <div class="toast-header">
+      <span class="toast-icon">🔴</span>
+      <span class="toast-title">Anomaly Detected!</span>
+    </div>
+    <div id="toastGradeName" class="toast-grade">Janjang Kosong</div>
+    <div class="toast-meta">
+      <span class="toast-badge" id="toastScanNum"></span>
+      <span class="toast-badge" id="toastConfidence"></span>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════════════════
+     TOP NAVIGATION BAR
+════════════════════════════════════════════════════════════════════════════ -->
+<nav class="navbar" role="banner">
+  <div class="navbar-brand">
+    <div class="brand-icon" aria-hidden="true">🌴</div>
+    <div>
+      <div class="brand-name">TBS Grading Monitor</div>
+      <div class="brand-sub">Edge AI Palm Oil FFB · MAX78000FTHR</div>
+    </div>
+  </div>
+
+  <!-- System status indicators -->
+  <div class="navbar-indicators" role="status" aria-label="System Status">
+    <div class="nav-status-group">
+      <span id="ledMqtt"     class="led-dot led-gray" title="MQTT Status"    aria-label="MQTT"></span>
+      <span>MQTT</span>
+    </div>
+    <div class="nav-status-group">
+      <span id="ledMax78000" class="led-dot led-gray" title="MAX78000 Status" aria-label="MAX78000"></span>
+      <span>MAX78000</span>
+    </div>
+    <div class="nav-status-group">
+      <span id="ledGateway"  class="led-dot led-gray" title="ESP-12E Status"  aria-label="ESP-12E"></span>
+      <span>ESP-12E</span>
+    </div>
+    <div class="nav-status-group">
+      <span id="ledLora"     class="led-dot led-gray" title="LoRa-02 Status"  aria-label="LoRa"></span>
+      <span>LoRa</span>
+    </div>
+    <div class="nav-status-group">
+      <span id="ledServer"   class="led-dot led-gray" title="Server API"      aria-label="Server"></span>
+      <span>Server</span>
+    </div>
+
+    <span id="mqttStatusBar" class="status-badge badge-red pulse" aria-live="polite">Connecting…</span>
+    <div id="liveClock" class="nav-clock" aria-live="off">--:--:--</div>
+  </div>
+</nav>
+
+<!-- ═══════════════════════════════════════════════════════════════════════
+     DEVICE CONNECTION STATUS BAR
+     Selalu terlihat — menampilkan status koneksi setiap perangkat
+════════════════════════════════════════════════════════════════════════════ -->
+<section class="conn-bar" role="status" aria-label="Device Connection Status">
+  <div class="conn-bar-inner">
+
+    <!-- MAX78000 FTHR -->
+    <div class="conn-card" id="connCard_max78000">
+      <div class="conn-card-led">
+        <span class="led-dot led-gray" id="connLed_max78000"></span>
+      </div>
+      <div class="conn-card-info">
+        <div class="conn-card-name">MAX78000FTHR</div>
+        <div class="conn-card-sub">CNN Camera</div>
+      </div>
+      <div class="conn-card-right">
+        <div class="conn-card-status" id="connStatus_max78000">Belum terhubung</div>
+        <div class="conn-card-time"   id="connTime_max78000">—</div>
+      </div>
+    </div>
+
+    <div class="conn-divider" aria-hidden="true"></div>
+
+    <!-- ESP-12E Gateway -->
+    <div class="conn-card" id="connCard_esp12e">
+      <div class="conn-card-led">
+        <span class="led-dot led-gray" id="connLed_esp12e"></span>
+      </div>
+      <div class="conn-card-info">
+        <div class="conn-card-name">ESP-12E</div>
+        <div class="conn-card-sub">Wi-Fi Gateway</div>
+      </div>
+      <div class="conn-card-right">
+        <div class="conn-card-status" id="connStatus_esp12e">Belum terhubung</div>
+        <div class="conn-card-time"   id="connTime_esp12e">—</div>
+      </div>
+    </div>
+
+    <div class="conn-divider" aria-hidden="true"></div>
+
+    <!-- MQTT Broker -->
+    <div class="conn-card" id="connCard_mqtt">
+      <div class="conn-card-led">
+        <span class="led-dot led-gray" id="connLed_mqtt"></span>
+      </div>
+      <div class="conn-card-info">
+        <div class="conn-card-name">MQTT Broker</div>
+        <div class="conn-card-sub">Mosquitto ws:9001</div>
+      </div>
+      <div class="conn-card-right">
+        <div class="conn-card-status" id="connStatus_mqtt">Menghubungkan…</div>
+        <div class="conn-card-time"   id="connTime_mqtt">—</div>
+      </div>
+    </div>
+
+    <div class="conn-divider" aria-hidden="true"></div>
+
+    <!-- LoRa-02 -->
+    <div class="conn-card" id="connCard_lora">
+      <div class="conn-card-led">
+        <span class="led-dot led-gray" id="connLed_lora"></span>
+      </div>
+      <div class="conn-card-info">
+        <div class="conn-card-name">LoRa-02</div>
+        <div class="conn-card-sub">SX1278 · 433 MHz</div>
+      </div>
+      <div class="conn-card-right">
+        <div class="conn-card-status" id="connStatus_lora">Menunggu gateway</div>
+        <div class="conn-card-time"   id="connTime_lora">—</div>
+      </div>
+    </div>
+
+    <div class="conn-divider" aria-hidden="true"></div>
+
+    <!-- Server API -->
+    <div class="conn-card" id="connCard_server">
+      <div class="conn-card-led">
+        <span class="led-dot led-gray" id="connLed_server"></span>
+      </div>
+      <div class="conn-card-info">
+        <div class="conn-card-name">Server API</div>
+        <div class="conn-card-sub">TimescaleDB · FastAPI</div>
+      </div>
+      <div class="conn-card-right">
+        <div class="conn-card-status" id="connStatus_server">Menghubungkan…</div>
+        <div class="conn-card-time"   id="connTime_server">—</div>
+      </div>
+    </div>
+
+  </div>
+</section>
+
+<!-- ═══════════════════════════════════════════════════════════════════════
+     OFFLINE BANNER — muncul jika semua koneksi terputus
+════════════════════════════════════════════════════════════════════════════ -->
+<div id="offlineBanner" class="offline-banner offline-banner-hidden" role="alert" aria-live="assertive">
+  <span class="offline-icon">📡</span>
+  <span>Dashboard berjalan dalam mode <strong>OFFLINE</strong> — data tidak diperbarui. Periksa koneksi server &amp; perangkat.</span>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════════════════
+     MAIN DASHBOARD GRID
+════════════════════════════════════════════════════════════════════════════ -->
+<main class="dashboard-grid" aria-label="Dashboard">
+
+  <!-- ─── ROW 1: Metric Cards ─────────────────────────────────────────── -->
+  <section class="metrics-row" aria-label="Key Metrics">
+
+    <!-- Card 1: Last Scan Result -->
+    <article id="lastScanCard" class="card" aria-label="Last Scan Result">
+      <div class="card-header">
+        <span class="card-title">Last Scan</span>
+        <span id="lastScanNum" class="scan-num" aria-label="Scan number">—</span>
+      </div>
+      <div class="card-body">
+        <div class="flex-center" style="gap:10px; flex-wrap:wrap;">
+          <span id="lastScanGrade"
+                class="grade-badge"
+                style="font-size:1rem; padding: 6px 14px;"
+                aria-label="Grade result">—</span>
+          <span id="lastScanClass" style="font-size:0.8rem; color:var(--text-muted)"></span>
+        </div>
+
+        <div class="last-scan-meta">
+          <span style="font-size:0.75rem; color:var(--text-secondary)">Waktu:</span>
+          <span id="lastScanTime"
+                style="font-size:0.82rem; font-weight:600; font-variant-numeric:tabular-nums"
+                aria-live="polite">—</span>
+        </div>
+
+        <div class="conf-label">Confidence: <strong id="lastScanConf" aria-live="polite">—</strong></div>
+        <div class="conf-bar-track" role="progressbar" aria-valuemin="0" aria-valuemax="100">
+          <div id="confBar" class="conf-bar-fill"></div>
+        </div>
+      </div>
+    </article>
+
+    <!-- Card 2: Throughput -->
+    <article class="card" aria-label="Throughput">
+      <div class="card-header">
+        <span class="card-title">Throughput</span>
+        <span class="status-badge badge-green">Real-time</span>
+      </div>
+      <div class="card-body" style="text-align:center;">
+        <div id="throughputValue" class="throughput-big" aria-live="polite">0</div>
+        <div class="throughput-unit">bundles / menit (last minute)</div>
+        <div class="rssi-row" style="justify-content:center; margin-top:14px;">
+          <span class="led-dot led-gray" id="ledGwRssi" style="width:7px;height:7px;"></span>
+          <span>Wi-Fi RSSI:</span>
+          <span id="gatewayRssi" style="color:var(--clr-neutral)">—</span>
+        </div>
+      </div>
+    </article>
+
+    <!-- Card 3: Today's Total -->
+    <article class="card" aria-label="Today Production">
+      <div class="card-header">
+        <span class="card-title">Hari Ini</span>
+        <span id="statMatangRate" style="font-size:0.72rem; color:var(--clr-primary); font-weight:700;">0%</span>
+      </div>
+      <div class="card-body">
+        <div id="statTotal" class="metric-value" aria-live="polite">0</div>
+        <div class="metric-label">total tandan dipindai</div>
+
+        <div class="stats-grid" style="margin-top:14px;">
+          <div class="stat-item">
+            <span class="stat-item-label">Matang</span>
+            <span id="statMatang" class="stat-item-value stat-matang">0</span>
+          </div>
+          <div class="stat-item">
+            <span class="stat-item-label">Mentah</span>
+            <span id="statMentah" class="stat-item-value stat-mentah">0</span>
+          </div>
+          <div class="stat-item">
+            <span class="stat-item-label">Overripe</span>
+            <span id="statOverripe" class="stat-item-value stat-overripe">0</span>
+          </div>
+          <div class="stat-item">
+            <span class="stat-item-label">J. Kosong</span>
+            <span id="statJanjang" class="stat-item-value stat-janjang">0</span>
+          </div>
+        </div>
+      </div>
+    </article>
+
+    <!-- Card 4: Anomaly Counter -->
+    <article id="anomalyCard" class="card" aria-label="Anomaly Events">
+      <div class="card-header">
+        <span class="card-title">Anomali Hari Ini</span>
+        <span class="status-badge badge-red">ALERT</span>
+      </div>
+      <div class="card-body" style="text-align:center; padding-top:18px;">
+        <div id="statAnomalies" class="anomaly-count-big" aria-live="assertive">0</div>
+        <div class="metric-label" style="margin-top:6px;">total event anomali</div>
+
+        <div style="margin-top:16px; font-size:0.72rem; color:var(--text-muted); line-height:1.6;">
+          Anomali = Janjang Kosong<br>
+          atau confidence &lt; 60%
+        </div>
+        <div style="margin-top:10px; font-size:0.72rem; color:var(--text-secondary);">
+          Rata-rata confidence:
+          <span id="statAvgConf" style="color:var(--clr-primary); font-weight:700;">—</span>
+        </div>
+      </div>
+    </article>
+
+  </section>
+
+  <!-- ─── ROW 2: Charts ───────────────────────────────────────────────── -->
+  <section class="charts-row" aria-label="Charts">
+
+    <!-- Donut chart: grade distribution -->
+    <article class="card" aria-label="Grade Distribution Today">
+      <div class="card-header">
+        <span class="card-title">Distribusi Grade (Hari Ini)</span>
+      </div>
+      <div class="card-body" style="padding-top:12px;">
+        <div class="chart-container donut-wrap">
+          <canvas id="donutChart" aria-label="Grade distribution donut chart"></canvas>
+        </div>
+      </div>
+    </article>
+
+    <!-- Line chart: throughput trend -->
+    <article class="card" aria-label="Throughput Trend">
+      <div class="card-header">
+        <span class="card-title">Throughput Trend (30 Menit Terakhir)</span>
+        <span style="font-size:0.7rem; color:var(--text-muted)">bundles / menit</span>
+      </div>
+      <div class="card-body" style="padding-top:12px;">
+        <div class="chart-container line-wrap">
+          <canvas id="throughputChart" aria-label="Throughput per minute line chart"></canvas>
+        </div>
+      </div>
+    </article>
+
+  </section>
+
+  <!-- ─── ROW 3: Live Feed Table ──────────────────────────────────────── -->
+  <article class="card" aria-label="Live Scan Feed">
+    <div class="card-header">
+      <span class="card-title">Live Scan Feed</span>
+      <span class="status-badge badge-green" id="mqttStatusBar2" aria-live="polite">Live ●</span>
+    </div>
+
+    <div class="feed-wrapper" role="region" aria-label="Recent scan results table">
+      <table class="feed-table" id="feedTable">
+        <thead>
+          <tr>
+            <th scope="col">Waktu</th>
+            <th scope="col">Scan #</th>
+            <th scope="col">Grade</th>
+            <th scope="col">Confidence</th>
+            <th scope="col">Kanal</th>
+            <th scope="col">Status</th>
+          </tr>
+        </thead>
+        <tbody id="feedTableBody">
+          <!-- Rows injected by dashboard.js -->
+          <tr>
+            <td colspan="6" style="text-align:center; color:var(--text-muted); padding:24px;">
+              Menunggu data dari sistem…
+            </td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </article>
+
+  <!-- ─── ROW 4: Footer ────────────────────────────────────────────────── -->
+  <footer class="footer-bar" role="contentinfo">
+    <span>
+      Edge AI Palm Oil FFB Grading System · MAX78000FTHR + ESP-12E + TimescaleDB
+    </span>
+    <div class="footer-right">
+      <span>Sensor: <strong style="color:var(--text-primary)">TBS_SCANNER_001</strong></span>
+      <span>Refresh: 5s · MQTT: ws:9001</span>
+    </div>
+  </footer>
+
+</main>
+
+<!-- ═══════════════════════════════════════════════════════════════════════
+     SCRIPTS (load order matters)
+════════════════════════════════════════════════════════════════════════════ -->
+<script src="js/config.js"></script>
+<script src="js/mqtt_client.js"></script>
+<script src="js/charts.js"></script>
+<script src="js/indicators.js"></script>
+<!-- dashboard.js must be last — it depends on all other modules + Chart.js -->
+<script>
+  // Wait for Chart.js to finish loading (it has defer attribute via CDN)
+  window.addEventListener('DOMContentLoaded', () => {
+    const chartScript = document.createElement('script');
+    chartScript.src = 'js/dashboard.js';
+    document.body.appendChild(chartScript);
+  });
+</script>
+
+</body>
+</html>

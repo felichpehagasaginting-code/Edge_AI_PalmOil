@@ -1,0 +1,338 @@
+###############################################################################
+# FILE: docker-compose.yml
+# PROJECT: Edge AI Palm Oil FFB (TBS) Grading System — Server Backend
+# DESCRIPTION:
+#   Docker Compose stack for the factory server aggregation layer.
+#   Deploys 6 services:
+#
+#   1. mosquitto       — Eclipse Mosquitto v2.x MQTT broker
+#                        Listens on port 1883 (MQTT) and 9001 (WebSocket)
+#
+#   2. timescaledb     — TimescaleDB (PostgreSQL + time-series extension)
+#                        Port 5432. Stores FFB grading events as hypertable.
+#
+#   3. mqtt_to_db      — Python daemon: subscribes to MQTT, inserts to DB
+#                        Runs as a background service with auto-restart.
+#
+#   4. grafana         — Grafana v10.x for real-time monitoring dashboards
+#                        Port 3000. Pre-configured with TimescaleDB datasource.
+#
+#   5. dashboard_api   — FastAPI REST backend for the custom web dashboard
+#                        Port 8000 (internal only, proxied via Nginx).
+#
+#   6. dashboard_nginx — Nginx serving the web dashboard frontend + API proxy
+#                        Port 80. Access at http://localhost/
+#
+# USAGE:
+#   docker-compose up -d                    # Start all services in background
+#   docker-compose logs -f mqtt_to_db       # Follow MQTT daemon logs
+#   docker-compose logs -f dashboard_api    # Follow API logs
+#   docker-compose down                     # Stop all services
+#   docker-compose down -v                  # Stop + remove volumes (DATA LOSS!)
+#
+# PORTS SUMMARY:
+#   80    — Custom Web Dashboard (Nginx: frontend + API proxy)
+#   1883  — Mosquitto MQTT (TCP)
+#   9001  — Mosquitto MQTT-over-WebSocket (used by dashboard browser)
+#   5432  — TimescaleDB / PostgreSQL
+#   3000  — Grafana web dashboard
+#
+# ACCESS:
+#   Dashboard: http://localhost             (custom web UI — NEW)
+#   Grafana:   http://localhost:3000        (admin / admin_grafana_pass)
+#   MQTT:      mqtt://localhost:1883
+#
+# SECURITY NOTE:
+#   This configuration is optimized for factory LAN deployment.
+#   For internet-exposed deployments:
+#     - Enable Mosquitto TLS (port 8883) with certificates
+#     - Use Grafana HTTPS with a reverse proxy (nginx/traefik)
+#     - Use strong passwords (change all defaults below)
+###############################################################################
+
+version: '3.8'
+
+# ── Named Volumes (persistent data storage) ───────────────────────────────────
+volumes:
+  mosquitto_data:
+    driver: local
+    name: tbs_mosquitto_data
+
+  mosquitto_log:
+    driver: local
+    name: tbs_mosquitto_log
+
+  timescaledb_data:
+    driver: local
+    name: tbs_timescaledb_data
+
+  grafana_data:
+    driver: local
+    name: tbs_grafana_data
+
+# ── Custom Bridge Network ─────────────────────────────────────────────────────
+# All services communicate over this internal network using service names
+# as hostnames (e.g., mqtt_to_db connects to "mosquitto:1883")
+networks:
+  tbs_iot_network:
+    driver: bridge
+    name: tbs_iot_network
+    ipam:
+      config:
+        - subnet: 172.28.0.0/16
+
+# ── Services ──────────────────────────────────────────────────────────────────
+services:
+
+  # ── 1. Eclipse Mosquitto v2.x MQTT Broker ──────────────────────────────────
+  mosquitto:
+    image: eclipse-mosquitto:2.0.18
+    container_name: tbs_mosquitto
+    restart: unless-stopped
+
+    ports:
+      - "1883:1883"   # Standard MQTT TCP port (devices connect here)
+      - "9001:9001"   # MQTT over WebSocket (for web-based clients/MQTT Explorer)
+
+    volumes:
+      # Mosquitto configuration file (see mosquitto/mosquitto.conf)
+      - ./mosquitto/mosquitto.conf:/mosquitto/config/mosquitto.conf:ro
+      # Password file (generated with: mosquitto_passwd -c /mosquitto/config/passwd <user>)
+      - ./mosquitto/passwd:/mosquitto/config/passwd:ro
+      # Persistent data: retained messages and persistence file
+      - mosquitto_data:/mosquitto/data
+      # Log directory
+      - mosquitto_log:/mosquitto/log
+
+    networks:
+      - tbs_iot_network
+
+    # Health check: verify Mosquitto is accepting connections
+    healthcheck:
+      test: ["CMD-SHELL", "mosquitto_pub -h localhost -p 1883 -t 'health' -m 'ping' -u iot_gateway -P secure_mqtt_pass || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "5"
+
+  # ── 2. TimescaleDB (PostgreSQL + Time-Series Extension) ────────────────────
+  timescaledb:
+    image: timescale/timescaledb:latest-pg15
+    container_name: tbs_timescaledb
+    restart: unless-stopped
+
+    ports:
+      - "5432:5432"   # PostgreSQL port (only accessible from factory LAN)
+
+    environment:
+      POSTGRES_DB:       grading_db          # Database name
+      POSTGRES_USER:     tbs_user            # Database user
+      POSTGRES_PASSWORD: secure_db_pass_123  # CHANGE IN PRODUCTION!
+      PGDATA:            /var/lib/postgresql/data/pgdata
+
+    volumes:
+      # Persistent database storage
+      - timescaledb_data:/var/lib/postgresql/data
+      # SQL initialization script (creates tables and hypertable on first start)
+      - ./timescaledb/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+
+    networks:
+      - tbs_iot_network
+
+    # PostgreSQL health check
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U tbs_user -d grading_db"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+
+    # Performance tuning for time-series workload
+    command: >
+      postgres
+        -c max_connections=50
+        -c shared_buffers=256MB
+        -c work_mem=16MB
+        -c maintenance_work_mem=64MB
+        -c checkpoint_completion_target=0.9
+        -c wal_buffers=16MB
+        -c random_page_cost=1.1
+        -c effective_cache_size=1GB
+        -c timescaledb.max_background_workers=4
+
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  # ── 3. MQTT→DB Bridge Daemon ───────────────────────────────────────────────
+  mqtt_to_db:
+    build:
+      context: ./mqtt_to_db
+      dockerfile: Dockerfile
+    container_name: tbs_mqtt_to_db
+    restart: unless-stopped
+
+    environment:
+      # MQTT connection settings (must match mosquitto.conf)
+      MQTT_BROKER_HOST: mosquitto      # Service hostname on Docker network
+      MQTT_BROKER_PORT: "1883"
+      MQTT_USERNAME:    iot_gateway
+      MQTT_PASSWORD:    secure_mqtt_pass
+      MQTT_TOPIC:       pks/grading/tbs/result
+
+      # Database connection settings (must match timescaledb service)
+      DB_HOST:          timescaledb    # Service hostname on Docker network
+      DB_PORT:          "5432"
+      DB_NAME:          grading_db
+      DB_USER:          tbs_user
+      DB_PASSWORD:      secure_db_pass_123
+
+      # Logging
+      LOG_LEVEL:        INFO
+
+    depends_on:
+      mosquitto:
+        condition: service_healthy
+      timescaledb:
+        condition: service_healthy
+
+    networks:
+      - tbs_iot_network
+
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "20m"
+        max-file: "10"
+
+  # ── 4. Grafana v10 Dashboard ───────────────────────────────────────────────
+  grafana:
+    image: grafana/grafana:10.2.0
+    container_name: tbs_grafana
+    restart: unless-stopped
+
+    ports:
+      - "3000:3000"   # Grafana web UI
+
+    environment:
+      # Admin credentials (CHANGE ON FIRST LOGIN!)
+      GF_SECURITY_ADMIN_USER:     admin
+      GF_SECURITY_ADMIN_PASSWORD: admin_grafana_pass  # CHANGE THIS!
+      GF_SECURITY_SECRET_KEY:     a_secret_key_change_me_in_prod
+
+      # Disable anonymous access (require login)
+      GF_AUTH_ANONYMOUS_ENABLED:  "false"
+
+      # Organization and branding
+      GF_SERVER_DOMAIN:     localhost
+      GF_SERVER_ROOT_URL:   "%(protocol)s://%(domain)s:%(http_port)s/"
+
+      # Plugin auto-installation (TimescaleDB uses standard PostgreSQL plugin)
+      GF_INSTALL_PLUGINS:   "grafana-clock-panel,grafana-simple-json-datasource"
+
+    volumes:
+      - grafana_data:/var/lib/grafana
+      # Pre-configured datasource (TimescaleDB via PostgreSQL plugin)
+      - ./grafana/provisioning:/etc/grafana/provisioning:ro
+
+    depends_on:
+      timescaledb:
+        condition: service_healthy
+
+    networks:
+      - tbs_iot_network
+
+    # Grafana health check
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:3000/api/health | grep ok"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  # ── 5. Custom Web Dashboard — FastAPI REST Backend ─────────────────────────
+  dashboard_api:
+    build:
+      context: ../5_web_dashboard/backend
+      dockerfile: Dockerfile
+    container_name: tbs_dashboard_api
+    restart: unless-stopped
+
+    environment:
+      DB_HOST:     timescaledb
+      DB_PORT:     "5432"
+      DB_NAME:     grading_db
+      DB_USER:     tbs_user
+      DB_PASSWORD: secure_db_pass_123
+
+    expose:
+      - "8000"   # Internal only — accessed via Nginx proxy on port 80
+
+    depends_on:
+      timescaledb:
+        condition: service_healthy
+
+    networks:
+      - tbs_iot_network
+
+    healthcheck:
+      test: ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://localhost:8000/health')\""]
+      interval: 20s
+      timeout: 8s
+      retries: 3
+      start_period: 15s
+
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "5"
+
+  # ── 6. Custom Web Dashboard — Nginx (Frontend + Reverse Proxy) ────────────
+  dashboard_nginx:
+    image: nginx:1.25-alpine
+    container_name: tbs_dashboard_nginx
+    restart: unless-stopped
+
+    ports:
+      - "80:80"    # Custom web dashboard — access at http://server-ip/
+
+    volumes:
+      # Static frontend files (HTML, CSS, JS)
+      - ../5_web_dashboard/frontend:/usr/share/nginx/html:ro
+      # Nginx reverse proxy configuration
+      - ../5_web_dashboard/nginx.conf:/etc/nginx/conf.d/default.conf:ro
+
+    depends_on:
+      dashboard_api:
+        condition: service_healthy
+
+    networks:
+      - tbs_iot_network
+
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost/health | grep ok || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
+
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "5m"
+        max-file: "3"

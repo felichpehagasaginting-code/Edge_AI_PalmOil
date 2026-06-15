@@ -1,0 +1,29 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+venv/
+.venv/
+env/
+.env
+
+# MAX78000 Firmware build outputs
+build/
+bin/
+*.elf
+*.bin
+*.map
+*.o
+*.d
+
+# OS & IDE
+.DS_Store
+.vscode/
+.idea/
+
+# Local data & logs
+*.log
+data/
+datasets/data/
+**/ai8x-training/
+**/ai8x-synthesis/

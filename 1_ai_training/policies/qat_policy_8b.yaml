@@ -1,0 +1,76 @@
+###############################################################################
+# FILE: policies/qat_policy_8b.yaml
+# PROJECT: Edge AI Palm Oil FFB (TBS) Grading System
+# DESCRIPTION:
+#   Quantization-Aware Training (QAT) policy for 8-bit weight and activation
+#   quantization using the Distiller compression scheduler framework, which
+#   is integrated into the ai8x-training SDK.
+#
+#   This policy is used in Phase 2 of training (fine-tuning after float
+#   pre-training) to prepare the model for deployment on the MAX78000
+#   hardware CNN accelerator.
+#
+# MAX78000 QUANTIZATION SPECS:
+#   - Weights: 8-bit signed integer (INT8), range [-128, 127]
+#   - Activations: 8-bit signed integer (INT8) after each fused ReLU
+#   - Biases: 32-bit integer (INT32)
+#   - Input layer: 8-bit signed (normalized from uint8 camera pixel)
+#
+# USAGE:
+#   Invoked automatically by train.py Phase 2 command in train_pipeline.sh:
+#     python train.py ... --compress policies/qat_policy_8b.yaml
+#
+# REFERENCES:
+#   - Distiller docs: https://intellabs.github.io/distiller/schedule.html
+#   - ADI ai8x-training: analogdevicesinc/ai8x-training on GitHub
+###############################################################################
+
+# ── Distiller Compression Schedule ───────────────────────────────────────────
+version: 1
+
+# Quantizer definition — this section configures which quantizer to use
+# and how it applies to the model's layers.
+quantizers:
+  ai8x_qat_8bit:
+    # Use the ai8x-specific QAT quantizer, which is aware of the MAX78000's
+    # hardware quantization scheme (per-layer, per-channel weight quantization).
+    class: ai8x.AI8XQuantizer
+
+    # Quantization precision
+    bits_weights: 8        # Weight quantization: 8-bit signed INT8
+    bits_activations: 8    # Activation quantization: 8-bit signed INT8
+    bits_biases: null      # Biases remain 32-bit (handled by HW accumulator)
+
+    # Quantization mode: 'asymmetric' maps to hardware-native representation
+    mode: 'symmetric'      # Symmetric: zero-point = 0 (INT8 range [-128,127])
+
+    # Apply quantization to ALL layers by default.
+    # Named exceptions can override specific layers below.
+    overrides: null
+
+# ── Compression Schedule ──────────────────────────────────────────────────────
+# Defines WHEN quantization starts and what training epoch triggers it.
+#
+# Strategy:
+#   Epoch 0-4   : No quantization (model adapts to new learning rate)
+#   Epoch 5+    : Apply QAT quantization for all remaining fine-tune epochs
+#
+# This "warm-up" period prevents the quantization noise from destabilizing
+# the model at the start of Phase 2 fine-tuning.
+policies:
+  - quantizer: ai8x_qat_8bit
+    starting_epoch: 5       # Start QAT after 5 warm-up epochs of fine-tuning
+    ending_epoch: 10000     # End effectively = run for all fine-tune epochs
+    frequency: 1            # Apply quantization every epoch (continuous QAT)
+
+# ── Optimizer Overrides ───────────────────────────────────────────────────────
+# During QAT Phase 2, use a lower learning rate to avoid overwriting
+# the pre-trained float features too aggressively.
+# Note: These are passed via CLI in train_pipeline.sh, not via this YAML.
+# They are documented here for reference.
+#
+# Recommended Phase 2 hyperparameters:
+#   --lr 0.0001
+#   --weight-decay 1e-5
+#   --lr-scheduler CosineAnnealingLR
+#   --t-max 100              (match Phase 2 epoch count)

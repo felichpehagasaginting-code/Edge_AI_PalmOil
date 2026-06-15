@@ -200,23 +200,22 @@
         <span id="lastScanNum" class="scan-num" aria-label="Scan number">—</span>
       </div>
       <div class="card-body">
-        <div class="flex-center" style="gap:10px; flex-wrap:wrap;">
+        <div class="flex-wrap-gap-10">
           <span id="lastScanGrade"
                 class="grade-badge"
-                style="font-size:1rem; padding: 6px 14px;"
                 aria-label="Grade result">—</span>
-          <span id="lastScanClass" style="font-size:0.8rem; color:var(--text-muted)"></span>
+          <span id="lastScanClass" class="text-muted-small"></span>
         </div>
 
         <div class="last-scan-meta">
-          <span style="font-size:0.75rem; color:var(--text-secondary)">Waktu:</span>
+          <span class="meta-label">Waktu:</span>
           <span id="lastScanTime"
-                style="font-size:0.82rem; font-weight:600; font-variant-numeric:tabular-nums"
+                class="time-value"
                 aria-live="polite">—</span>
         </div>
 
         <div class="conf-label">Confidence: <strong id="lastScanConf" aria-live="polite">—</strong></div>
-        <div class="conf-bar-track" role="progressbar" aria-valuemin="0" aria-valuemax="100">
+        <div class="conf-bar-track" role="progressbar" aria-label="Confidence level" aria-valuemin="0" aria-valuemax="100">
           <div id="confBar" class="conf-bar-fill"></div>
         </div>
       </div>
@@ -228,13 +227,13 @@
         <span class="card-title">Throughput</span>
         <span class="status-badge badge-green">Real-time</span>
       </div>
-      <div class="card-body" style="text-align:center;">
+      <div class="card-body text-center">
         <div id="throughputValue" class="throughput-big" aria-live="polite">0</div>
         <div class="throughput-unit">bundles / menit (last minute)</div>
-        <div class="rssi-row" style="justify-content:center; margin-top:14px;">
-          <span class="led-dot led-gray" id="ledGwRssi" style="width:7px;height:7px;"></span>
+        <div class="rssi-row justify-center margin-top-14">
+          <span class="led-dot led-gray gw-rssi-led" id="ledGwRssi"></span>
           <span>Wi-Fi RSSI:</span>
-          <span id="gatewayRssi" style="color:var(--clr-neutral)">—</span>
+          <span id="gatewayRssi" class="clr-neutral-text">—</span>
         </div>
       </div>
     </article>
@@ -243,13 +242,13 @@
     <article class="card" aria-label="Today Production">
       <div class="card-header">
         <span class="card-title">Hari Ini</span>
-        <span id="statMatangRate" style="font-size:0.72rem; color:var(--clr-primary); font-weight:700;">0%</span>
+        <span id="statMatangRate" class="rate-text">0%</span>
       </div>
       <div class="card-body">
         <div id="statTotal" class="metric-value" aria-live="polite">0</div>
         <div class="metric-label">total tandan dipindai</div>
 
-        <div class="stats-grid" style="margin-top:14px;">
+        <div class="stats-grid margin-top-14">
           <div class="stat-item">
             <span class="stat-item-label">Matang</span>
             <span id="statMatang" class="stat-item-value stat-matang">0</span>
@@ -276,17 +275,17 @@
         <span class="card-title">Anomali Hari Ini</span>
         <span class="status-badge badge-red">ALERT</span>
       </div>
-      <div class="card-body" style="text-align:center; padding-top:18px;">
+      <div class="card-body anomaly-body">
         <div id="statAnomalies" class="anomaly-count-big" aria-live="assertive">0</div>
-        <div class="metric-label" style="margin-top:6px;">total event anomali</div>
+        <div class="metric-label margin-top-6">total event anomali</div>
 
-        <div style="margin-top:16px; font-size:0.72rem; color:var(--text-muted); line-height:1.6;">
+        <div class="anomaly-desc">
           Anomali = Janjang Kosong<br>
           atau confidence &lt; 60%
         </div>
-        <div style="margin-top:10px; font-size:0.72rem; color:var(--text-secondary);">
+        <div class="avg-conf-row">
           Rata-rata confidence:
-          <span id="statAvgConf" style="color:var(--clr-primary); font-weight:700;">—</span>
+          <span id="statAvgConf" class="avg-conf-value">—</span>
         </div>
       </div>
     </article>
@@ -301,7 +300,7 @@
       <div class="card-header">
         <span class="card-title">Distribusi Grade (Hari Ini)</span>
       </div>
-      <div class="card-body" style="padding-top:12px;">
+      <div class="card-body card-body-padding-top-12">
         <div class="chart-container donut-wrap">
           <canvas id="donutChart" aria-label="Grade distribution donut chart"></canvas>
         </div>
@@ -312,9 +311,9 @@
     <article class="card" aria-label="Throughput Trend">
       <div class="card-header">
         <span class="card-title">Throughput Trend (30 Menit Terakhir)</span>
-        <span style="font-size:0.7rem; color:var(--text-muted)">bundles / menit</span>
+        <span class="muted-small-text">bundles / menit</span>
       </div>
-      <div class="card-body" style="padding-top:12px;">
+      <div class="card-body card-body-padding-top-12">
         <div class="chart-container line-wrap">
           <canvas id="throughputChart" aria-label="Throughput per minute line chart"></canvas>
         </div>
@@ -345,7 +344,7 @@
         <tbody id="feedTableBody">
           <!-- Rows injected by dashboard.js -->
           <tr>
-            <td colspan="6" style="text-align:center; color:var(--text-muted); padding:24px;">
+            <td colspan="6" class="feed-empty-cell">
               Menunggu data dari sistem…
             </td>
           </tr>
@@ -360,7 +359,7 @@
       Edge AI Palm Oil FFB Grading System · MAX78000FTHR + ESP-12E + TimescaleDB
     </span>
     <div class="footer-right">
-      <span>Sensor: <strong style="color:var(--text-primary)">TBS_SCANNER_001</strong></span>
+      <span>Sensor: <strong class="text-primary-bold">TBS_SCANNER_001</strong></span>
       <span>Refresh: 5s · MQTT: ws:9001</span>
     </div>
   </footer>

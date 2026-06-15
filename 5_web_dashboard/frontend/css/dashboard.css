@@ -85,8 +85,8 @@ body::before {
   border:        1px solid var(--border);
   border-radius: var(--radius);
   box-shadow:    var(--shadow-card);
-  backdrop-filter: blur(10px);
   -webkit-backdrop-filter: blur(10px);
+  backdrop-filter: blur(10px);
   transition:    var(--transition);
   position:      relative;
   overflow:      hidden;
@@ -137,6 +137,7 @@ body::before {
   height:           60px;
   background:       rgba(10, 14, 26, 0.9);
   border-bottom:    1px solid var(--border);
+  -webkit-backdrop-filter: blur(20px);
   backdrop-filter:  blur(20px);
   position:         sticky;
   top:              0;
@@ -368,6 +369,8 @@ body::before {
   background: color-mix(in srgb, var(--badge-color, var(--clr-primary)) 15%, transparent);
   color:      var(--badge-color, var(--clr-primary));
   border-color: color-mix(in srgb, var(--badge-color, var(--clr-primary)) 30%, transparent);
+  font-size: 1rem;
+  padding: 6px 14px;
 }
 
 .last-scan-meta {
@@ -498,6 +501,7 @@ body::before {
   position:       sticky;
   top:            0;
   background:     rgba(10, 14, 26, 0.95);
+  -webkit-backdrop-filter: blur(8px);
   backdrop-filter: blur(8px);
   padding:        10px 14px;
   text-align:     left;
@@ -594,6 +598,7 @@ body::before {
   border-radius: var(--radius);
   padding:       16px 18px;
   box-shadow:    0 8px 32px rgba(255, 71, 87, 0.35), var(--shadow-glow-red);
+  -webkit-backdrop-filter: blur(20px);
   backdrop-filter: blur(20px);
 }
 
@@ -729,6 +734,7 @@ body::before {
 .conn-bar {
   background:    rgba(10, 14, 26, 0.85);
   border-bottom: 1px solid var(--border);
+  -webkit-backdrop-filter: blur(12px);
   backdrop-filter: blur(12px);
   position:      relative;
   z-index:       10;
@@ -869,5 +875,85 @@ body::before {
 .card[data-offline="true"] .throughput-big,
 .card[data-offline="true"] .anomaly-count-big {
   opacity: 0.45;
+}
+
+/* Inline styles replacement utilities */
+.flex-wrap-gap-10 {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+.text-muted-small {
+  font-size: 0.8rem;
+  color: var(--text-muted);
+}
+.meta-label {
+  font-size: 0.75rem;
+  color: var(--text-secondary);
+}
+.time-value {
+  font-size: 0.82rem;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+.text-center {
+  text-align: center;
+}
+.margin-top-14 {
+  margin-top: 14px;
+}
+.gw-rssi-led {
+  width: 7px;
+  height: 7px;
+}
+.clr-neutral-text {
+  color: var(--clr-neutral);
+}
+.rate-text {
+  font-size: 0.72rem;
+  color: var(--clr-primary);
+  font-weight: 700;
+}
+.anomaly-body {
+  text-align: center;
+  padding-top: 18px;
+}
+.margin-top-6 {
+  margin-top: 6px;
+}
+.anomaly-desc {
+  margin-top: 16px;
+  font-size: 0.72rem;
+  color: var(--text-muted);
+  line-height: 1.6;
+}
+.avg-conf-row {
+  margin-top: 10px;
+  font-size: 0.72rem;
+  color: var(--text-secondary);
+}
+.avg-conf-value {
+  color: var(--clr-primary);
+  font-weight: 700;
+}
+.card-body-padding-top-12 {
+  padding-top: 12px;
+}
+.muted-small-text {
+  font-size: 0.7rem;
+  color: var(--text-muted);
+}
+.feed-empty-cell {
+  text-align: center;
+  color: var(--text-muted);
+  padding: 24px;
+}
+.text-primary-bold {
+  color: var(--text-primary);
+  font-weight: 700;
+}
+.justify-center {
+  justify-content: center;
 }
 

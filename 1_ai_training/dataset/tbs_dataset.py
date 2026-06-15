@@ -30,8 +30,6 @@
 #   val_ds   = TBSDataset(root='./data', split='val')
 ###############################################################################
 
-import os
-import sys
 import logging
 from pathlib import Path
 from typing import Optional, Tuple, Dict, List
@@ -42,7 +40,7 @@ from torchvision import transforms
 from PIL import Image
 import numpy as np
 
-# ── Logger Setup ──────────────────────────────────────────────────────────────
+# ── Logger Setup ────────────────────────────────────────────────────────────
 logger = logging.getLogger(__name__)
 logging.basicConfig(
     level=logging.INFO,
@@ -57,10 +55,10 @@ logging.basicConfig(
 # Canonical class index mapping — must match the ai8xize synthesis config
 # and the firmware cnn_inference.c grade label array.
 CLASS_NAMES: Dict[int, str] = {
-    0: "Mentah",        # Unripe
-    1: "Matang",        # Ripe (optimal harvest)
-    2: "Overripe",      # Over-ripe
-    3: "Janjang Kosong" # Empty bunch
+    0: "Mentah",          # Unripe
+    1: "Matang",          # Ripe (optimal harvest)
+    2: "Overripe",        # Over-ripe
+    3: "Janjang Kosong"   # Empty bunch
 }
 
 NUM_CLASSES: int = len(CLASS_NAMES)
@@ -86,7 +84,10 @@ def build_train_transforms() -> transforms.Compose:
     """
     return transforms.Compose([
         # Step 1: Resize to target resolution
-        transforms.Resize((INPUT_SIZE, INPUT_SIZE), interpolation=Image.BILINEAR),
+        transforms.Resize(
+            (INPUT_SIZE, INPUT_SIZE),
+            interpolation=transforms.InterpolationMode.BILINEAR
+        ),
 
         # Step 2: Geometric augmentations
         transforms.RandomHorizontalFlip(p=0.5),
@@ -99,7 +100,7 @@ def build_train_transforms() -> transforms.Compose:
             brightness=0.3,  # ±30% brightness for lighting fluctuation
             contrast=0.3,    # ±30% contrast
             saturation=0.2,  # ±20% saturation (ripeness color shift)
-            hue=0.05         # Slight hue shift for different lighting color temps
+            hue=0.05   # Slight hue shift for different lighting temps
         ),
 
         # Step 4: Convert to tensor [0.0, 1.0] float32
@@ -121,7 +122,10 @@ def build_val_transforms() -> transforms.Compose:
     No augmentation — only resize and normalize.
     """
     return transforms.Compose([
-        transforms.Resize((INPUT_SIZE, INPUT_SIZE), interpolation=Image.BILINEAR),
+        transforms.Resize(
+            (INPUT_SIZE, INPUT_SIZE),
+            interpolation=transforms.InterpolationMode.BILINEAR
+        ),
         transforms.ToTensor(),
         transforms.Normalize(
             mean=[0.5, 0.5, 0.5],
@@ -163,7 +167,9 @@ class TBSDataset(Dataset):
         transform: Optional[transforms.Compose] = None
     ) -> None:
         if split not in ('train', 'val'):
-            raise ValueError(f"Invalid split '{split}'. Must be 'train' or 'val'.")
+            raise ValueError(
+                f"Invalid split '{split}'. Must be 'train' or 'val'."
+            )
 
         self.root = Path(root)
         self.split = split
@@ -172,12 +178,14 @@ class TBSDataset(Dataset):
         if not self.split_dir.exists():
             raise FileNotFoundError(
                 f"Dataset split directory not found: {self.split_dir}\n"
-                f"Expected structure: {root}/{split}/{{class_index}}_{{class_name}}/"
+                f"Expected structure: "
+                f"{root}/{split}/{{class_index}}_{{class_name}}/"
             )
 
         # Resolve transform
         self.transform = transform or (
-            build_train_transforms() if split == 'train' else build_val_transforms()
+            build_train_transforms() if split == 'train'
+            else build_val_transforms()
         )
 
         # Discover samples
@@ -185,14 +193,14 @@ class TBSDataset(Dataset):
         self._discover_samples()
 
         logger.info(
-            f"[TBSDataset] Split='{split}' | "
-            f"Samples={len(self.samples)} | "
-            f"Classes={NUM_CLASSES}"
+            "[TBSDataset] Split='%s' | Samples=%d | Classes=%d",
+            split, len(self.samples), NUM_CLASSES
         )
 
     def _discover_samples(self) -> None:
         """
-        Walks the split directory and builds the (image_path, class_label) list.
+        Walks the split directory and builds the (image_path, class_label)
+        list.
 
         Class label is parsed from the leading integer in the directory name:
             '0_mentah' → label = 0
@@ -211,21 +219,24 @@ class TBSDataset(Dataset):
         valid_extensions = {'.jpg', '.jpeg', '.png', '.bmp', '.webp'}
 
         for class_dir in class_dirs:
-            # Parse class index from directory name prefix (e.g., "0_mentah" → 0)
+            # Parse class index from directory name prefix
+            # (e.g., "0_mentah" → 0)
             dir_name = class_dir.name
             try:
                 class_idx = int(dir_name.split('_')[0])
             except (ValueError, IndexError):
                 logger.warning(
-                    f"[TBSDataset] Skipping directory '{dir_name}' — "
-                    f"cannot parse class index from name prefix."
+                    "[TBSDataset] Skipping directory '%s' — "
+                    "cannot parse class index from name prefix.",
+                    dir_name
                 )
                 continue
 
             if class_idx not in CLASS_NAMES:
                 logger.warning(
-                    f"[TBSDataset] Skipping directory '{dir_name}' — "
-                    f"class index {class_idx} not in CLASS_NAMES."
+                    "[TBSDataset] Skipping directory '%s' — "
+                    "class index %d not in CLASS_NAMES.",
+                    dir_name, class_idx
                 )
                 continue
 
@@ -236,7 +247,8 @@ class TBSDataset(Dataset):
 
             if not image_files:
                 logger.warning(
-                    f"[TBSDataset] No images found in class dir: {class_dir}"
+                    "[TBSDataset] No images found in class dir: %s",
+                    class_dir
                 )
                 continue
 
@@ -271,7 +283,10 @@ class TBSDataset(Dataset):
         try:
             image = Image.open(img_path).convert('RGB')
         except (IOError, OSError) as exc:
-            logger.error(f"[TBSDataset] Failed to open image: {img_path} — {exc}")
+            logger.error(
+                "[TBSDataset] Failed to open image: %s — %s",
+                img_path, exc
+            )
             # Return a zero tensor as fallback to avoid training crash
             dummy = torch.zeros(3, INPUT_SIZE, INPUT_SIZE, dtype=torch.float32)
             return dummy, class_label
@@ -299,7 +314,7 @@ class TBSDataset(Dataset):
             count = label_counts.get(cls_idx, 1)  # avoid division by zero
             weights[cls_idx] = total / (NUM_CLASSES * count)
 
-        logger.info(f"[TBSDataset] Class weights: {weights.tolist()}")
+        logger.info("[TBSDataset] Class weights: %s", weights.tolist())
         return weights
 
     def __repr__(self) -> str:
@@ -334,31 +349,32 @@ def build_dataloaders(
         Tuple of (train_loader, val_loader).
     """
     train_dataset = TBSDataset(root=data_root, split='train')
-    val_dataset   = TBSDataset(root=data_root, split='val')
+    val_dataset = TBSDataset(root=data_root, split='val')
 
     train_loader = DataLoader(
         dataset=train_dataset,
         batch_size=batch_size,
-        shuffle=True,           # Shuffle training data each epoch
+        shuffle=True,  # Shuffle training data each epoch
         num_workers=num_workers,
         pin_memory=pin_memory,
-        drop_last=True,         # Drop incomplete last batch for stable BN stats
+        drop_last=True,  # Drop incomplete last batch for stable BN stats
         persistent_workers=(num_workers > 0)
     )
 
     val_loader = DataLoader(
         dataset=val_dataset,
         batch_size=batch_size,
-        shuffle=False,          # No shuffle for reproducible validation
+        shuffle=False,  # No shuffle for reproducible validation
         num_workers=num_workers,
         pin_memory=pin_memory,
         drop_last=False
     )
 
     logger.info(
-        f"[DataLoader] Train: {len(train_dataset)} samples, "
-        f"{len(train_loader)} batches | "
-        f"Val: {len(val_dataset)} samples, {len(val_loader)} batches"
+        "[DataLoader] Train: %d samples, %d batches | "
+        "Val: %d samples, %d batches",
+        len(train_dataset), len(train_loader),
+        len(val_dataset), len(val_loader)
     )
 
     return train_loader, val_loader
@@ -368,11 +384,9 @@ def build_dataloaders(
 # Self-Test
 ###############################################################################
 
-if __name__ == "__main__":
-    """
-    Quick sanity-check. Creates dummy dataset structure and verifies loading.
-    Run: python -m dataset.tbs_dataset
-    """
+def main() -> None:
+    # Quick sanity-check. Creates dummy dataset structure and verifies loading.
+    # Run: python -m dataset.tbs_dataset
     import tempfile
 
     print("Running TBSDataset self-test with temporary dummy data...")
@@ -383,18 +397,23 @@ if __name__ == "__main__":
         # Create dummy class directories and placeholder images
         for split in ('train', 'val'):
             for cls_idx, cls_name in CLASS_NAMES.items():
-                class_dir = tmp_path / split / f"{cls_idx}_{cls_name.replace(' ', '_').lower()}"
+                cls_folder_name = (
+                    f"{cls_idx}_{cls_name.replace(' ', '_').lower()}"
+                )
+                class_dir = tmp_path / split / cls_folder_name
                 class_dir.mkdir(parents=True, exist_ok=True)
 
                 # Create 5 dummy RGB PNG images per class
                 for img_idx in range(5):
-                    dummy_array = np.random.randint(0, 255, (160, 160, 3), dtype=np.uint8)
+                    dummy_array = np.random.randint(
+                        0, 255, (160, 160, 3), dtype=np.uint8
+                    )
                     dummy_img = Image.fromarray(dummy_array)
                     dummy_img.save(class_dir / f"sample_{img_idx:03d}.png")
 
         # Test Dataset
         ds_train = TBSDataset(root=tmp_dir, split='train')
-        ds_val   = TBSDataset(root=tmp_dir, split='val')
+        ds_val = TBSDataset(root=tmp_dir, split='val')
 
         print(f"  Train dataset: {repr(ds_train)}")
         print(f"  Val   dataset: {repr(ds_val)}")
@@ -402,7 +421,8 @@ if __name__ == "__main__":
         # Test __getitem__
         img_tensor, label = ds_train[0]
         print(f"  Sample tensor shape : {img_tensor.shape}")
-        print(f"  Sample tensor range : [{img_tensor.min():.3f}, {img_tensor.max():.3f}]")
+        print("  Sample tensor range : "
+              f"[{img_tensor.min():.3f}, {img_tensor.max():.3f}]")
         print(f"  Sample label        : {label} ({CLASS_NAMES[label]})")
 
         assert img_tensor.shape == (3, INPUT_SIZE, INPUT_SIZE), \
@@ -421,7 +441,12 @@ if __name__ == "__main__":
         )
 
         for batch_imgs, batch_labels in train_dl:
-            print(f"  Batch shape: {batch_imgs.shape}, Labels: {batch_labels.tolist()}")
+            print(f"  Batch shape: {batch_imgs.shape}, "
+                  f"Labels: {batch_labels.tolist()}")
             break
 
         print("\n[PASS] TBSDataset self-test complete.")
+
+
+if __name__ == "__main__":
+    main()

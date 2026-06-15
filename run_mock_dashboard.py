@@ -54,6 +54,13 @@ def generate_random_scan(scan_num):
         
     is_anomaly = grade == 3 or confidence < 60
     
+    img_map = {
+        0: 'img/unripe_bunch.png',
+        1: 'img/ripe_bunch.png',
+        2: 'img/overripe_bunch.png',
+        3: 'img/empty_bunch.png'
+    }
+    
     return {
         "event_time": datetime.now(timezone.utc).isoformat(),
         "grade": grade,
@@ -61,7 +68,8 @@ def generate_random_scan(scan_num):
         "confidence_pct": confidence,
         "is_anomaly": is_anomaly,
         "transport": random.choice(["wi-fi", "lora"]),
-        "scan_count": scan_num
+        "scan_count": scan_num,
+        "image_url": img_map.get(grade, 'img/camera_placeholder.png')
     }
 
 # Start with some historical recent scans
@@ -136,12 +144,6 @@ class MockAPIHandler(http.server.SimpleHTTPRequestHandler):
     def handle_api(self):
         # Parse query params
         clean_path = self.path.split('?', 1)[0]
-        
-        self.send_response(200)
-        self.send_header('Content-Type', 'application/json')
-        self.send_header('Access-Control-Allow-Origin', '*')
-        self.end_headers()
-        
         response_data = {}
         
         if clean_path == '/api/stats/today':
@@ -208,7 +210,15 @@ class MockAPIHandler(http.server.SimpleHTTPRequestHandler):
         else:
             response_data = {"error": "Not Found", "path": clean_path}
             
-        self.wfile.write(json.dumps(response_data).encode('utf-8'))
+        encoded_response = json.dumps(response_data).encode('utf-8')
+        
+        self.send_response(200)
+        self.send_header('Content-Type', 'application/json')
+        self.send_header('Access-Control-Allow-Origin', '*')
+        self.send_header('Content-Length', str(len(encoded_response)))
+        self.end_headers()
+        
+        self.wfile.write(encoded_response)
 
 
 # ── Run Server ────────────────────────────────────────────────────────────────

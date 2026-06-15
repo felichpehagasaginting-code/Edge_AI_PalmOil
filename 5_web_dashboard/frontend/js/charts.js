@@ -8,12 +8,7 @@
  */
 
 const Charts = (() => {
-  // ── Shared Chart.js defaults ───────────────────────────────────────────────
-  Chart.defaults.color           = '#8892aa';
-  Chart.defaults.font.family     = "'Inter', sans-serif";
-  Chart.defaults.font.size       = 12;
-  Chart.defaults.borderColor     = 'rgba(255,255,255,0.06)';
-  Chart.defaults.plugins.legend.labels.boxWidth = 12;
+
 
   // ── Grade palette (from CONFIG) ────────────────────────────────────────────
   const GRADE_COLORS = CONFIG.GRADES.map(g => g.color);
@@ -185,9 +180,15 @@ const Charts = (() => {
     _throughputChart.update('active');
   }
 
-  // ── Public API ─────────────────────────────────────────────────────────────
   return {
     init() {
+      // ── Shared Chart.js defaults ───────────────────────────────────────────────
+      Chart.defaults.color           = '#8892aa';
+      Chart.defaults.font.family     = "'Inter', sans-serif";
+      Chart.defaults.font.size       = 12;
+      Chart.defaults.borderColor     = 'rgba(255,255,255,0.06)';
+      Chart.defaults.plugins.legend.labels.boxWidth = 12;
+
       _donutChart      = _initDonut('donutChart');
       _throughputChart = _initThroughput('throughputChart');
     },

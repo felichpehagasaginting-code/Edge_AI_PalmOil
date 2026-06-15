@@ -130,6 +130,18 @@ const Indicators = (() => {
     const classLabel = document.getElementById('lastScanClass');
     if (classLabel) classLabel.textContent = `Kelas ${grade}`;
 
+    // Camera Preview Image
+    const previewImg = document.getElementById('cameraPreviewImg');
+    if (previewImg) {
+      const imgMap = {
+        0: 'img/unripe_bunch.png',
+        1: 'img/ripe_bunch.png',
+        2: 'img/overripe_bunch.png',
+        3: 'img/empty_bunch.png',
+      };
+      previewImg.src = imgMap[grade] ?? 'img/camera_placeholder.png';
+    }
+
     // Confidence percentage
     const confEl = document.getElementById('lastScanConf');
     if (confEl) confEl.textContent = `${confidence}%`;

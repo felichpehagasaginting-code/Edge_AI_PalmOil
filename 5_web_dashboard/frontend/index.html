@@ -200,23 +200,37 @@
         <span id="lastScanNum" class="scan-num" aria-label="Scan number">—</span>
       </div>
       <div class="card-body">
-        <div class="flex-wrap-gap-10">
-          <span id="lastScanGrade"
-                class="grade-badge"
-                aria-label="Grade result">—</span>
-          <span id="lastScanClass" class="text-muted-small"></span>
-        </div>
+        <div class="last-scan-layout">
+          <!-- Left scan details -->
+          <div class="last-scan-details">
+            <div class="flex-wrap-gap-10">
+              <span id="lastScanGrade"
+                    class="grade-badge"
+                    aria-label="Grade result">—</span>
+              <span id="lastScanClass" class="text-muted-small"></span>
+            </div>
 
-        <div class="last-scan-meta">
-          <span class="meta-label">Waktu:</span>
-          <span id="lastScanTime"
-                class="time-value"
-                aria-live="polite">—</span>
-        </div>
+            <div class="last-scan-meta">
+              <span class="meta-label">Waktu:</span>
+              <span id="lastScanTime"
+                    class="time-value"
+                    aria-live="polite">—</span>
+            </div>
 
-        <div class="conf-label">Confidence: <strong id="lastScanConf" aria-live="polite">—</strong></div>
-        <div class="conf-bar-track" role="progressbar" aria-label="Confidence level" aria-valuemin="0" aria-valuemax="100">
-          <div id="confBar" class="conf-bar-fill"></div>
+            <div class="conf-label">Confidence: <strong id="lastScanConf" aria-live="polite">—</strong></div>
+            <div class="conf-bar-track" role="progressbar" aria-label="Confidence level" aria-valuemin="0" aria-valuemax="100">
+              <div id="confBar" class="conf-bar-fill"></div>
+            </div>
+          </div>
+
+          <!-- Right Camera Viewport -->
+          <div class="camera-preview-container" aria-label="Live Camera Viewport">
+            <div class="camera-rec-dot"></div>
+            <div class="camera-overlay-text">LIVE FEED</div>
+            <div class="camera-crosshair"></div>
+            <div class="camera-lens-reflection"></div>
+            <img id="cameraPreviewImg" src="img/camera_placeholder.png" alt="Live conveyor camera scan view" />
+          </div>
         </div>
       </div>
     </article>

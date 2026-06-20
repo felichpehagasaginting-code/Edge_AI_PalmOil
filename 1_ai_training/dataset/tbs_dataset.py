@@ -307,8 +307,6 @@ class TBSDataset(Dataset):
             FloatTensor of shape (NUM_CLASSES,) for use with
             nn.CrossEntropyLoss(weight=...).
         """
-
-
         label_counts = Counter(label for _, label in self.samples)
         total = len(self.samples)
 

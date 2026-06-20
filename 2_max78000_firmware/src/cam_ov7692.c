@@ -26,14 +26,14 @@
 #include "/home/felichpg/Felichs/msdk/Libraries/MiscDrivers/Camera/camera.h"
 
 /* OV7692 register address definitions */
-#include "ov7692_regs.h"
+/* #include "ov7692_regs.h" */
 
 /* MAX78000 peripheral & driver includes */
-#include "mxc_device.h"
-#include "dma.h"
+/* #include "mxc_device.h" */
+/* #include "dma.h" */
 #include "mxc_delay.h"
-#include "gpio.h"
-#include "i2c.h"
+/* #include "gpio.h" */
+/* #include "i2c.h" */
 
 /* Our project camera abstraction (camera_status_t, camera_module_init, etc.)
  * Guard: PROJECT_CAMERA_DRIVER_H — no conflict with MSDK camera.h */

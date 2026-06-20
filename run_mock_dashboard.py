@@ -83,8 +83,9 @@ def generate_random_scan(scan_num):
 
 
 # Start with some historical recent scans
-for _idx in range(SimState.scan_counter - 10,
-                   SimState.scan_counter + 1):
+for _idx in range(
+    SimState.scan_counter - 10, SimState.scan_counter + 1
+):
     _scan = generate_random_scan(_idx)
     _scan_time = (
         datetime.now(timezone.utc)
@@ -95,7 +96,10 @@ for _idx in range(SimState.scan_counter - 10,
 
 
 def update_simulation():
-    """Advance the simulation by generating a new scan if enough time passed."""
+    """Advance the simulation.
+
+    Generates a new scan if enough time has passed.
+    """
     now = time.time()
     elapsed = now - SimState.last_sim_time
 

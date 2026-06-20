@@ -197,13 +197,14 @@ class TBSClassifier(nn.Module):
             **kwargs
         )
 
-        # ── Global Average Pooling ────────────────────────────────────────────
+        # ── Global Average Pooling ───────────────────────────────────────────
         # Collapses (B, 64, 32, 32) → (B, 64, 1, 1) before
         # the classifier head.
         # Preferred over Flatten for spatial invariance and lower param count.
         self.global_avg_pool = nn.AdaptiveAvgPool2d((1, 1))
 
-        # ── Classifier Head ───────────────────────────────────────────────────
+        # ── Classifier Head ──────────────────────────────────────────────────
+
         # Maps the 64-dim feature vector to 4 class logits.
         # ai8x.Linear wraps nn.Linear with quantization.
         self.classifier = ai8x.Linear(

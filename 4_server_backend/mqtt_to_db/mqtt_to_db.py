@@ -749,7 +749,6 @@ def _signal_handler(signum, _frame):
     sys.exit(0)
 
 
-
 if __name__ == "__main__":
 
     # Register signal handlers for graceful Docker shutdown

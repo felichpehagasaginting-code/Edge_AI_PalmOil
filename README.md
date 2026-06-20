@@ -1,4 +1,5 @@
 # Edge AI Palm Oil FFB (TBS) Grading System
+
 ## Complete Production-Ready Codebase
 
 **Target Platform:** Analog Devices MAX78000FTHR + ESP-12E Edge Gateway + Factory Server Stack  
@@ -8,7 +9,7 @@
 
 ## Repository Structure
 
-```
+```text
 IoT_Grad_Scanner/
 │
 ├── 0_shared/                         # Common Utilities & Shared Libraries
@@ -108,7 +109,7 @@ IoT_Grad_Scanner/
 #### 0.1 Install Prerequisites
 
 | Software | Versi | Link |
-|---|---|---|
+| --- | --- | --- |
 | **Maxim MSDK** | Latest | [github.com/analogdevicesinc/msdk](https://github.com/analogdevicesinc/msdk) |
 | **ai8x-training SDK** | Latest | [github.com/analogdevicesinc/ai8x-training](https://github.com/analogdevicesinc/ai8x-training) |
 | **ai8x-synthesis SDK** | Latest | [github.com/analogdevicesinc/ai8x-synthesis](https://github.com/analogdevicesinc/ai8x-synthesis) |
@@ -129,14 +130,16 @@ cd IoT_Grad_Scanner
 Pasang kabel sesuai tabel di bawah sebelum flashing firmware apapun:
 
 **MAX78000FTHR → ESP-12E:**
-```
+
+```text
 MAX78000 P0.1 (TX)  ──►  ESP-12E GPIO3 (RX)
 MAX78000 P0.0 (RX)  ◄──  ESP-12E GPIO1 (TX)
 MAX78000 GND        ──►  ESP-12E GND
 ```
 
 **ESP-12E → LoRa-02 (SX1278):**
-```
+
+```text
 ESP-12E GPIO15  ──►  LoRa NSS (CS)
 ESP-12E GPIO14  ──►  LoRa SCK
 ESP-12E GPIO13  ──►  LoRa MOSI
@@ -146,7 +149,8 @@ ESP-12E GPIO4   ──►  LoRa DIO0
 ```
 
 **Sensor ke MAX78000:**
-```
+
+```text
 Photoelectric Sensor DO  ──►  MAX78000 P0.14  (+10kΩ pull-up ke 3.3V)
 Buzzer (-)               ──►  MAX78000 P0.12
 Buzzer (+)               ──►  3.3V
@@ -315,7 +319,8 @@ make size
 ```
 
 **Output yang diharapkan:**
-```
+
+```text
 [CC]  src/main.c
 [CC]  src/camera.c
 ...
@@ -338,7 +343,8 @@ make flash-and-monitor
 ```
 
 **✅ Output serial yang diharapkan:**
-```
+
+```text
 =========================================
   Edge AI Palm Oil FFB Grading System
   Target: MAX78000FTHR
@@ -358,13 +364,16 @@ make flash-and-monitor
 #### Step 4.1 — Install Library Arduino
 
 Buka Arduino IDE → **Tools → Manage Libraries**, install:
+
 - `ArduinoJson` by Benoit Blanchon (v6.x)
 - `PubSubClient` by Nick O'Leary (v2.8+)
 - `LoRa` by Sandeep Mistry (v0.8+)
 
 Install **ESP8266 Board Package:**
+
 1. **File → Preferences → Additional Board Manager URLs:**
-   ```
+
+   ```text
    http://arduino.esp8266.com/stable/package_esp8266com_index.json
    ```
 2. **Tools → Board Manager** → cari `esp8266` → Install
@@ -392,7 +401,8 @@ const char *MQTT_BROKER_IP = "192.168.1.100";          // ← IP server factory
 5. **Tools → Serial Monitor** (115200 baud) untuk melihat log
 
 **✅ Output Serial yang diharapkan:**
-```
+
+```text
 =========================================
   ESP-12E Edge Gateway — TBS Grader
 =========================================
@@ -452,7 +462,8 @@ docker-compose logs -f mqtt_to_db
 ```
 
 **Output `docker-compose ps` yang diharapkan (setelah ~30 detik):**
-```
+
+```text
 NAME                  IMAGE                      STATUS
 tbs_mosquitto         eclipse-mosquitto:2.0.18   Up (healthy)
 tbs_timescaledb       timescale/timescaledb:...  Up (healthy)
@@ -479,24 +490,26 @@ docker exec tbs_timescaledb \
 
 #### Web Dashboard (Custom UI)
 
-```
+```text
 http://<IP-SERVER-FACTORY>/
 ```
 
 Buka di browser dari komputer manapun di jaringan factory.
 
 **Indikator di navbar yang harus hijau:**
+
 - 🟢 **MQTT** — terkoneksi ke Mosquitto via WebSocket
 - 🟢 **Server** — API backend online
 
 Setelah hardware aktif (Tahap 3 & 4):
+
 - 🟢 **MAX78000** — berkedip setiap kali ada scan
 - 🟢 **ESP-12E** — update dari heartbeat 30 detik
 - 🟢 **LoRa** — status dari ESP-12E
 
 #### Grafana Dashboard (Advanced Analytics)
 
-```
+```text
 http://<IP-SERVER-FACTORY>:3000/
 Username: admin
 Password: admin_grafana_pass  (atau yang sudah diubah)
@@ -608,7 +621,7 @@ docker stats                          # CPU & memory usage
 ### MAX78000FTHR Pin Assignments
 
 | Function | GPIO Pin | Notes |
-|---|---|---|
+| --- | --- | --- |
 | OV7692 Camera | Built-in DVP | On-board ribbon — no wiring needed |
 | UART0 TX (→ ESP-12E) | P0.1 | 115200 baud, 3.3V logic |
 | UART0 RX (← ESP-12E) | P0.0 | |
@@ -618,7 +631,7 @@ docker stats                          # CPU & memory usage
 ### ESP-12E Pin Assignments
 
 | Function | GPIO | Notes |
-|---|---|---|
+| --- | --- | --- |
 | UART RX (← MAX78000) | GPIO3 (U0RXD) | Hardware Serial |
 | UART TX (→ MAX78000) | GPIO1 (U0TXD) | Hardware Serial |
 | LoRa-02 NSS (CS) | GPIO15 | SPI Chip Select |
@@ -632,7 +645,7 @@ docker stats                          # CPU & memory usage
 
 ## Data Flow
 
-```
+```text
 [Conveyor Belt Object]
          ↓ (photoelectric sensor trigger)
 [MAX78000: GPIO IRQ wakes from WFI sleep]
@@ -661,7 +674,7 @@ docker stats                          # CPU & memory usage
 ## MQTT Topic Reference
 
 | Topic | QoS | Direction | Description |
-|---|---|---|---|
+| --- | --- | --- | --- |
 | `pks/grading/tbs/result` | 1 | ESP→Broker | Scan results |
 | `pks/grading/tbs/status` | 0 | ESP→Broker | 30s heartbeat |
 | `pks/grading/tbs/cmd` | 1 | Broker→ESP | Commands (reboot, status) |
@@ -672,19 +685,24 @@ docker stats                          # CPU & memory usage
 
 Sistem ini memiliki modul diagnostik, logging terstruktur, pelacakan performa (SLA), dan manajemen alert terintegrasi yang memantau kesehatan seluruh ekosistem IoT secara real-time.
 
-### Fitur Utama:
+### Fitur Utama
+
 1. **Structured JSON Logging (`logger_config.py`)**: Format log terstruktur untuk mempermudah indexing dan monitoring.
-2. **Error Tracker & Alerts (`error_tracker.py`)**: Deteksi otomatis lonjakan error (spikes), pengkategorian tingkat keparahan (severity), dan error berulang.
+2. **Error Tracker & Alerts (`error_tracker.py`)**: Deteksi otomatis lonjakan error (spikes), pengkategorian tingkat keberatan (severity), dan error berulang.
 3. **Performance Profiling & SLA (`performance_monitor.py`)**: Pengukuran latensi kueri database dan respons API untuk mendeteksi degradasi performa.
 4. **Database Persistence (`db_logging.py`)**: Log, error, performa, dan alert disimpan langsung ke TimescaleDB hypertable untuk analisis jangka panjang.
 5. **Diagnostics Dashboard UI (`monitoring.html` & `monitoring.js`)**: Halaman khusus di dashboard web untuk memantau kesehatan tiap komponen sistem secara real-time dengan pembaruan otomatis setiap 10 detik.
 
-### Cara Mengakses Diagnostics Dashboard:
+### Cara Mengakses Diagnostics Dashboard
+
 Setelah server backend Docker berjalan (Tahap 5):
-```
+
+```text
 http://<IP-SERVER-FACTORY>/monitoring
 ```
+
 Anda dapat memantau beberapa tab:
+
 - **Overview**: Status kesehatan sistem, tren error 60 menit terakhir, status per komponen.
 - **Errors**: Tabel detail error dengan pencarian dan filter komponen/severity.
 - **Alerts**: Daftar peringatan aktif dengan tombol aksi Acknowledge.
@@ -707,7 +725,7 @@ Anda dapat memantau beberapa tab:
 
 ## Urutan Pengerjaan (Ringkas)
 
-```
+```text
 TAHAP 0  → Install tools + pasang kabel hardware
 TAHAP 1  → Latih model AI (butuh GPU + dataset)
 TAHAP 2  → Sintesis kode C dari model terlatih

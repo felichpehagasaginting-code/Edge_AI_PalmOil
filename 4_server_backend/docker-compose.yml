@@ -96,9 +96,9 @@ services:
 
     volumes:
       # Mosquitto configuration file (see mosquitto/mosquitto.conf)
-      - ./mosquitto/mosquitto.conf:/mosquitto/config/mosquitto.conf:ro
+      - ./mosquitto/mosquitto.conf:/mosquitto/config/mosquitto.conf:ro,z
       # Password file (generated with: mosquitto_passwd -c /mosquitto/config/passwd <user>)
-      - ./mosquitto/passwd:/mosquitto/config/passwd:ro
+      - ./mosquitto/passwd:/mosquitto/config/passwd:ro,z
       # Persistent data: retained messages and persistence file
       - mosquitto_data:/mosquitto/data
       # Log directory
@@ -140,7 +140,7 @@ services:
       # Persistent database storage
       - timescaledb_data:/var/lib/postgresql/data
       # SQL initialization script (creates tables and hypertable on first start)
-      - ./timescaledb/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+      - ./timescaledb/init.sql:/docker-entrypoint-initdb.d/init.sql:ro,z
 
     networks:
       - tbs_iot_network
@@ -241,7 +241,7 @@ services:
     volumes:
       - grafana_data:/var/lib/grafana
       # Pre-configured datasource (TimescaleDB via PostgreSQL plugin)
-      - ./grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./grafana/provisioning:/etc/grafana/provisioning:ro,z
 
     depends_on:
       timescaledb:
@@ -313,9 +313,9 @@ services:
 
     volumes:
       # Static frontend files (HTML, CSS, JS)
-      - ../5_web_dashboard/frontend:/usr/share/nginx/html:ro
+      - ../5_web_dashboard/frontend:/usr/share/nginx/html:ro,z
       # Nginx reverse proxy configuration
-      - ../5_web_dashboard/nginx.conf:/etc/nginx/conf.d/default.conf:ro
+      - ../5_web_dashboard/nginx.conf:/etc/nginx/conf.d/default.conf:ro,z
 
     depends_on:
       dashboard_api:

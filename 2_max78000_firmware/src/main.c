@@ -59,7 +59,9 @@
 #include "mxc_delay.h"
 #include "nvic_table.h"
 #include "gpio.h"
-#include "led.h"          /* On-board LED for status indication */
+#include "uart.h"           /* MSDK UART driver — needed for RX FIFO functions */
+#include "led.h"            /* On-board LED for status indication */
+#include "pb.h"             /* Push Button driver — SW4 debug trigger */
 
 /* Project module includes */
 #include "../include/camera.h"
@@ -86,12 +88,20 @@
 
 /**
  * @brief  Status LED assignment.
- *         LED0 = scanning indicator (blinks on each scan)
- *         LED1 = error indicator (stays on if init fails)
- *         MAX78000FTHR has 2 on-board LEDs (red and green).
+ *         LED0 = Red,   LED1 = Green,   LED2 = Blue (scan indicator)
+ *         MAX78000FTHR has 3 on-board LEDs (red, green, blue).
+ *
+ *         Scan-in-progress: LED2 (Blue) blinks.
+ *         Prediction result (displayed after scan):
+ *           Busuk / Jangkos → LED0 Red  ON
+ *           Matang          → LED1 Green ON
+ *           Mentah          → LED0 + LED1 (Yellow = Red + Green)
  */
-#define LED_SCAN_INDICATOR      0   /* LED0: Green — scan in progress */
-#define LED_ERROR_INDICATOR     1   /* LED1: Red — system error */
+#define LED_RED             0   /* LED0: Red  */
+#define LED_GREEN           1   /* LED1: Green */
+#define LED_BLUE            2   /* LED2: Blue  — scan-in-progress indicator */
+#define LED_SCAN_INDICATOR  LED_BLUE
+#define LED_ERROR_INDICATOR LED_RED
 
 /* ── Private State ────────────────────────────────────────────────────────── */
 
@@ -120,6 +130,15 @@ static cnn_result_t s_inference_result;
  */
 static uint32_t s_total_scans = 0;
 
+/**
+ * @brief  UART RX command buffer for PC-triggered scan commands.
+ *         Accumulates incoming chars until '\n' received.
+ *         When buffer == "SCAN", a scan pipeline is triggered.
+ */
+#define CMD_BUF_SIZE    16
+static char    s_cmd_buf[CMD_BUF_SIZE];
+static uint8_t s_cmd_idx = 0;
+
 /* ── Private Function Declarations ───────────────────────────────────────── */
 
 static void     prv_system_init(void);
@@ -127,11 +146,18 @@ static void     prv_proximity_gpio_irq_init(void);
 static void     prv_proximity_isr_handler(void *context);
 static void     prv_run_scan_pipeline(void);
 static void     prv_system_error_halt(const char *error_msg);
+static bool     prv_check_uart_command(void);  /* PC remote trigger via UART */
 
 /* ── Entry Point ──────────────────────────────────────────────────────────── */
 
 int main(void)
 {
+    /* ── Phase 0: Debugger Safety Window ────────────────────────────────── */
+    /* Give debugger at least 1 second to halt/reset target before code runs */
+    for (volatile int i = 0; i < 2000000; i++) {
+        __asm volatile("nop");
+    }
+
     /* ── Phase 1: System Initialization ─────────────────────────────────── */
     prv_system_init();
 
@@ -141,8 +167,11 @@ int main(void)
     uart_comm_status_t uart_ret = uart_comm_init();
     if (uart_ret != UART_COMM_OK) {
         LED_On(LED_ERROR_INDICATOR);
-        /* Can't use UART to log since it failed — halt silently */
-        while (1) { __WFI(); }
+        /* Can't use UART to log since it failed — blink fast, do NOT enter WFI */
+        while (1) {
+            LED_Toggle(LED_ERROR_INDICATOR);
+            for (volatile int i = 0; i < 200000; i++) { __asm volatile("nop"); }
+        }
     }
 
     printf("\r\n");
@@ -183,25 +212,41 @@ int main(void)
      * The system spends the vast majority of time here in low-power sleep.
      * Power consumption in WFI: ~0.5 mA (mostly camera standby and LDO quiescent).
      *
-     * When the photoelectric sensor detects a palm oil bunch on the conveyor,
-     * it drives the GPIO pin LOW (NPN open-collector), triggering the GPIO IRQ.
-     * The ISR sets s_conveyor_trigger_pending = true and returns immediately.
-     * The main loop wakes from WFI, checks the flag, and executes the pipeline.
+     * Wake sources:
+     *   1. GPIO P0.14 interrupt: photoelectric proximity sensor (production)
+     *   2. SW4 button press: manual debug trigger (for testing without sensor)
      */
     while (1) {
         /* Enter ARM sleep mode — CPU halts, peripherals remain active.
          * Wake sources: any pending IRQ (GPIO sensor, SysTick, DMA, etc.) */
         __WFI();
 
-        /* Check if the conveyor sensor fired */
+        /* ── Trigger Source 1: Proximity sensor GPIO IRQ (production) ─── */
         if (s_conveyor_trigger_pending) {
-            /* Clear the flag immediately to avoid re-triggering */
             s_conveyor_trigger_pending = false;
-
-            /* Execute the full scan-grade-report pipeline */
             prv_run_scan_pipeline();
         }
-        /* If woken by another IRQ (SysTick, etc.), simply loop back to sleep */
+
+        /* ── Trigger Source 2: SW4 button (debug/testing) ──────────────── */
+        if (PB_Get(0)) {
+            printf("[MAIN] [DEBUG] SW4 pressed — manual scan trigger!\r\n");
+            while (PB_Get(0)) {
+                MXC_Delay(MXC_DELAY_MSEC(10));
+            }
+            MXC_Delay(MXC_DELAY_MSEC(50));
+            prv_run_scan_pipeline();
+        }
+
+        /* ── Trigger Source 3: UART command "SCAN" from PC ───────────── */
+        /*
+         * Non-blocking check of UART0 RX FIFO.
+         * Send "SCAN\n" from PC to trigger a scan without touching the board.
+         * Example: echo 'SCAN' > /dev/ttyACM0
+         */
+        if (prv_check_uart_command()) {
+            printf("[MAIN] [DEBUG] UART command received — remote scan trigger!\r\n");
+            prv_run_scan_pipeline();
+        }
     }
 
     /* Unreachable — embedded systems loop forever */
@@ -241,8 +286,9 @@ static void prv_system_init(void)
 
     /* Initialize on-board LEDs for status indication */
     LED_Init();
-    LED_Off(LED_SCAN_INDICATOR);
-    LED_Off(LED_ERROR_INDICATOR);
+    LED_Off(LED_RED);
+    LED_Off(LED_GREEN);
+    LED_Off(LED_BLUE);
 
     printf("[MAIN] System clock: %lu Hz\r\n", (unsigned long)SystemCoreClock);
 }
@@ -445,7 +491,41 @@ static void prv_run_scan_pipeline(void)
         return;
     }
 
-    /* ── Step 9: Transmit JSON Result to ESP-12E Gateway ─────────────────── */
+    /* ── Step 9: Update Result LEDs ─────────────────────────────────────── */
+    /*
+     * Turn off all result LEDs first, then light the correct one.
+     * Note: LED_SCAN_INDICATOR (Blue/LED2) was already turned on at start.
+     *       We keep it on during scan and turn off here as scan is done.
+     */
+    LED_Off(LED_SCAN_INDICATOR);  /* Blue off — scan done */
+    LED_Off(LED_RED);
+    LED_Off(LED_GREEN);
+
+    switch (s_inference_result.grade) {
+        case CNN_CLASS_BUSUK:
+        case CNN_CLASS_JANGKOS:
+            /* Busuk / Jangkos → Merah */
+            LED_On(LED_RED);
+            break;
+
+        case CNN_CLASS_MATANG:
+            /* Matang → Hijau */
+            LED_On(LED_GREEN);
+            break;
+
+        case CNN_CLASS_MENTAH:
+            /* Mentah → Kuning (Merah + Hijau menyala bersamaan) */
+            LED_On(LED_RED);
+            LED_On(LED_GREEN);
+            break;
+
+        default:
+            /* Kelas tidak dikenal — kedipkan merah sebagai peringatan */
+            LED_On(LED_RED);
+            break;
+    }
+
+    /* ── Step 10: Transmit JSON Result to ESP-12E Gateway ─────────────────── */
     printf("[MAIN] Sending result to ESP-12E gateway...\r\n");
 
     uart_comm_status_t uart_ret = uart_send_result(&s_inference_result);
@@ -454,14 +534,21 @@ static void prv_run_scan_pipeline(void)
         /* Non-fatal — data loss for this scan, but system continues */
     }
 
-    /* ── Step 10: Pipeline Complete ──────────────────────────────────────── */
+    /* ── Step 11: Pipeline Complete ──────────────────────────────────────── */
     printf("[MAIN] === SCAN #%lu COMPLETE | Grade=%u (%s) | Confidence=%u%% ===\r\n",
            (unsigned long)s_total_scans,
            s_inference_result.grade,
            cnn_get_class_name(s_inference_result.grade),
            s_inference_result.confidence_pct);
 
+    /*
+     * Result LED stays on for 3 seconds so the operator can read it,
+     * then all LEDs are turned off before returning to idle.
+     */
+    MXC_Delay(MXC_DELAY_MSEC(3000));
     LED_Off(LED_SCAN_INDICATOR);
+    LED_Off(LED_RED);
+    LED_Off(LED_GREEN);
 
     /*
      * Note: We deliberately do NOT call cnn_hw_disable() here.
@@ -502,4 +589,56 @@ static void prv_system_error_halt(const char *error_msg)
         LED_Toggle(LED_ERROR_INDICATOR);
         MXC_Delay(MXC_DELAY_MSEC(500));
     }
+}
+
+/**
+ * @brief  Non-blocking UART RX command checker.
+ *
+ * @details Reads any available bytes from UART0 RX FIFO into a small buffer.
+ *          When a newline ('\\n' or '\\r') is received, checks if the buffer
+ *          contains the string "SCAN" (case-insensitive prefix match).
+ *
+ *          Called every main loop iteration — no blocking, no WFI disruption.
+ *
+ * @return true  if "SCAN\\n" was received → caller should trigger scan pipeline.
+ *         false if no complete command received yet.
+ *
+ * @usage  From PC terminal:
+ *           echo 'SCAN' > /dev/ttyACM0
+ *         Or from usb_serial_bridge.py keyboard shortcut (press 's').
+ */
+static bool prv_check_uart_command(void)
+{
+    /* Read all available bytes from UART0 RX FIFO (non-blocking) */
+    while (MXC_UART_GetRXFIFOAvailable(MXC_UART0) > 0) {
+        int ch = MXC_UART_ReadCharacterRaw(MXC_UART0);
+        if (ch < 0) {
+            break;  /* No more data */
+        }
+
+        if (ch == '\n' || ch == '\r') {
+            /* End of command — null-terminate and check */
+            s_cmd_buf[s_cmd_idx] = '\0';
+
+            bool is_scan_cmd = (s_cmd_idx >= 4 &&
+                                (s_cmd_buf[0] == 'S' || s_cmd_buf[0] == 's') &&
+                                (s_cmd_buf[1] == 'C' || s_cmd_buf[1] == 'c') &&
+                                (s_cmd_buf[2] == 'A' || s_cmd_buf[2] == 'a') &&
+                                (s_cmd_buf[3] == 'N' || s_cmd_buf[3] == 'n'));
+
+            s_cmd_idx = 0;  /* Reset buffer for next command */
+
+            if (is_scan_cmd) {
+                return true;
+            }
+        } else if (s_cmd_idx < CMD_BUF_SIZE - 1) {
+            /* Accumulate printable chars */
+            s_cmd_buf[s_cmd_idx++] = (char)ch;
+        } else {
+            /* Buffer overflow — reset and discard */
+            s_cmd_idx = 0;
+        }
+    }
+
+    return false;
 }

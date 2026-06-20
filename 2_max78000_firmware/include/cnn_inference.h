@@ -20,10 +20,10 @@
  *   cnn_hw_init() → cnn_load_input(buffer) → cnn_start_and_wait() → cnn_get_result()
  *
  * @class_mapping
- *   Index 0 → Mentah       (Unripe)
- *   Index 1 → Matang       (Ripe / Optimal)
- *   Index 2 → Overripe     (Over-ripe)
- *   Index 3 → Janjang Kosong (Empty Bunch)
+ *   Index 0 → Busuk        (Rotten)
+ *   Index 1 → Jangkos      (Empty Bunch / Janjang Kosong)
+ *   Index 2 → Matang       (Ripe / Optimal)
+ *   Index 3 → Mentah       (Unripe)
  */
 
 #ifndef CNN_INFERENCE_H
@@ -43,11 +43,11 @@
  */
 #define CNN_TIMEOUT_MS      (50U)
 
-/** Grade class name lookup table index values */
-#define CNN_CLASS_MENTAH            (0U)  /**< Unripe */
-#define CNN_CLASS_MATANG            (1U)  /**< Ripe (optimal) */
-#define CNN_CLASS_OVERRIPE          (2U)  /**< Over-ripe */
-#define CNN_CLASS_JANJANG_KOSONG    (3U)  /**< Empty bunch */
+/** Grade class name lookup table index values (must match ai8x-synthesis output order) */
+#define CNN_CLASS_BUSUK             (0U)  /**< Rotten */
+#define CNN_CLASS_JANGKOS           (1U)  /**< Empty bunch (Janjang Kosong) */
+#define CNN_CLASS_MATANG            (2U)  /**< Ripe (optimal) */
+#define CNN_CLASS_MENTAH            (3U)  /**< Unripe */
 
 /* ── Data Types ───────────────────────────────────────────────────────────── */
 

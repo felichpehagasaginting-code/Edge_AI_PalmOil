@@ -1,96 +1,99 @@
-/**
- * @file    tbs_cnn.h
- * @brief   STUB: ai8x-synthesis Generated CNN API for TBS Grading.
- * @project Edge AI Palm Oil FFB (TBS) Grading System
- *
- * ╔══════════════════════════════════════════════════════════════════════╗
- * ║  IMPORTANT: THIS FILE IS A PLACEHOLDER/STUB                        ║
- * ║                                                                      ║
- * ║  This file defines the expected API contract that will be fulfilled  ║
- * ║  by the actual generated tbs_cnn.h produced by the ai8x-synthesis   ║
- * ║  SDK tool (ai8xize.py).                                             ║
- * ║                                                                      ║
- * ║  Replace this stub with the real generated file after running:      ║
- * ║    python ai8xize.py --prefix tbs_cnn ...                           ║
- * ║  (See: 1_ai_training/README_synthesis.md for full instructions)     ║
- * ╚══════════════════════════════════════════════════════════════════════╝
- *
- * @note   The actual generated file will have the same function signatures
- *         but may include additional internal helper declarations.
- *         Do NOT modify function signatures below — they must match exactly.
+/**************************************************************************************************
+* Copyright (C) 2019-2021 Maxim Integrated Products, Inc. All Rights Reserved.
+*
+* Maxim Integrated Products, Inc. Default Copyright Notice:
+* https://www.maximintegrated.com/en/aboutus/legal/copyrights.html
+**************************************************************************************************/
+
+/*
+ * This header file was automatically @generated for the tbs_cnn network from a template.
+ * Please do not edit; instead, edit the template and regenerate.
  */
 
-#ifndef TBS_CNN_H
-#define TBS_CNN_H
+#ifndef __CNN_H__
+#define __CNN_H__
 
 #include <stdint.h>
+typedef int32_t q31_t;
+typedef int16_t q15_t;
 
-/* ── CNN API Contract (fulfilled by ai8x-synthesis generated code) ────────── */
+/* Return codes */
+#define CNN_FAIL 0
+#define CNN_OK 1
 
-/**
- * @brief  Enable CNN peripheral clock and power up CNN SRAM banks.
- * @param  clock_source  CNN clock source (e.g., MXC_S_GCR_PCLKDIV_CNNCLKSEL_PCLK)
- * @param  clock_div     CNN clock divider (e.g., MXC_S_GCR_PCLKDIV_CNNCLKDIV_DIV1)
- * @return 0 (CNN_OK) on success, non-zero on failure.
- */
-int cnn_enable(uint32_t clock_source, uint32_t clock_div);
+/*
+  SUMMARY OF OPS
+  Hardware: 12,147,136 ops (11,986,176 macc; 157,376 comp; 3,584 add; 0 mul; 0 bitwise)
+    Layer 0 (conv1_Conv_8): 1,720,320 ops (1,658,880 macc; 61,440 comp; 0 add; 0 mul; 0 bitwise)
+    Layer 1 (conv2_Conv_6): 8,371,200 ops (8,294,400 macc; 76,800 comp; 0 add; 0 mul; 0 bitwise)
+    Layer 2 (conv3_Conv_6): 1,954,304 ops (1,935,360 macc; 18,944 comp; 0 add; 0 mul; 0 bitwise)
+    Layer 3 (conv4_Conv_6): 100,544 ops (96,768 macc; 192 comp; 3,584 add; 0 mul; 0 bitwise)
+    Layer 4 (fc_Gemm_4): 768 ops (768 macc; 0 comp; 0 add; 0 mul; 0 bitwise)
 
-/**
- * @brief  Load compiled weight arrays from flash into CNN weight SRAM.
- *         Weight data is sourced from weights.h (included in tbs_cnn.c).
- * @return 0 (CNN_OK) on success.
- */
-int cnn_load_weights(void);
+  RESOURCE USAGE
+  Weight memory: 8,884 bytes out of 442,368 bytes total (2.0%)
+  Bias memory:   4 bytes out of 2,048 bytes total (0.2%)
+*/
 
-/**
- * @brief  Load bias values into CNN bias SRAM.
- *         Typically a no-op for bias-free models.
- * @return 0 (CNN_OK) on success.
- */
-int cnn_load_bias(void);
+/* Number of outputs for this network */
+#define CNN_NUM_OUTPUTS 2
 
-/**
- * @brief  Configure CNN layer topology registers.
- *         Programs all layer configuration memory based on synthesis output.
- * @return 0 (CNN_OK) on success.
- */
-int cnn_configure(void);
+/* Port pin actions used to signal that processing is active */
 
-/**
- * @brief  Write input image tensor into CNN input data SRAM.
- *         Reads pixel data from the global g_cnn_input_ptr pointer.
- *         Called by preprocess.c after setting g_cnn_input_ptr.
- */
-void cnn_input_load(void);
+#define CNN_START LED_On(1)
+#define CNN_COMPLETE LED_Off(1)
+#define SYS_START LED_On(0)
+#define SYS_COMPLETE LED_Off(0)
 
-/**
- * @brief  Start CNN hardware accelerator execution.
- *         Returns immediately — inference runs asynchronously.
- *         Poll MXC_CNN_CheckComplete() or wait for CNN IRQ.
- */
-void cnn_start(void);
+/* Run software SoftMax on unloaded data */
+void softmax_q17p14_q15(const q31_t * vec_in, const uint16_t dim_vec, q15_t * p_out);
+/* Shift the input, then calculate SoftMax */
+void softmax_shift_q17p14_q15(q31_t * vec_in, const uint16_t dim_vec, uint8_t in_shift, q15_t * p_out);
 
-/**
- * @brief  Read output logits from CNN output SRAM into caller's buffer.
- * @param  out_buf  Pointer to array of CNN_NUM_CLASSES uint32_t values.
- *                  Values are INT32 logits cast to uint32_t by the generated code.
- */
-void cnn_unload(uint32_t *out_buf);
+/* Stopwatch - holds the runtime when accelerator finishes */
+extern volatile uint32_t cnn_time;
 
-/**
- * @brief  Disable CNN peripheral (clock gate + SRAM power down).
- *         Weights are lost — call cnn_load_weights() before next inference.
- * @return 0 (CNN_OK) on success.
- */
+/* Custom memcopy routines used for weights and data */
+void memcpy32(uint32_t *dst, const uint32_t *src, int n);
+void memcpy32_const(uint32_t *dst, int n);
+
+/* Enable clocks and power to accelerator, enable interrupt */
+int cnn_enable(uint32_t clock_source, uint32_t clock_divider);
+
+/* Disable clocks and power to accelerator */
 int cnn_disable(void);
 
-/* ── MSDK Helper (from mxc_cnn.h) ─────────────────────────────────────────── */
+/* Perform minimum accelerator initialization so it can be configured */
+int cnn_init(void);
 
-/**
- * @brief  Check whether the CNN accelerator has finished inference.
- * @return Non-zero (true) if CNN is done, 0 (false) if still running.
- *         Implemented in MSDK Libraries/PeriphDrivers/Source/CNN/cnn_me17.c
- */
-int MXC_CNN_CheckComplete(void);
+/* Configure accelerator for the given network */
+int cnn_configure(void);
 
-#endif /* TBS_CNN_H */
+/* Load accelerator weights */
+int cnn_load_weights(void);
+
+/* Verify accelerator weights (debug only) */
+int cnn_verify_weights(void);
+
+/* Load accelerator bias values (if needed) */
+int cnn_load_bias(void);
+
+/* Start accelerator processing */
+int cnn_start(void);
+
+/* Force stop accelerator */
+int cnn_stop(void);
+
+/* Continue accelerator after stop */
+int cnn_continue(void);
+
+/* Unload results from accelerator */
+int cnn_unload(uint32_t *out_buf);
+
+/* Turn on the boost circuit */
+int cnn_boost_enable(mxc_gpio_regs_t *port, uint32_t pin);
+
+/* Turn off the boost circuit */
+int cnn_boost_disable(mxc_gpio_regs_t *port, uint32_t pin);
+
+#endif // __CNN_H__

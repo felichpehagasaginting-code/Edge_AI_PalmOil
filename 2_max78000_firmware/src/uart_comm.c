@@ -94,7 +94,7 @@ uart_comm_status_t uart_comm_init(void)
      *   baud:     Target baud rate (115200)
      *   map:      Pin mapping (MAP_A = default pins on MAX78000FTHR)
      */
-    ret = MXC_UART_Init(UART_COMM_PORT, UART_COMM_BAUD_RATE, MAP_A);
+    ret = MXC_UART_Init(UART_COMM_PORT, UART_COMM_BAUD_RATE, MXC_UART_IBRO_CLK);
     if (ret != E_NO_ERROR) {
         printf("[UART] ERROR: MXC_UART_Init failed: %d\r\n", ret);
         return UART_COMM_ERR_INIT;
@@ -154,10 +154,16 @@ uart_comm_status_t uart_send_result(const cnn_result_t *result)
     /* ── Check Anomaly Conditions → Trigger Buzzer ───────────────────────── */
     bool is_anomaly = false;
 
-    if (result->grade == CNN_CLASS_JANJANG_KOSONG) {
-        /* Empty bunch detected — potential conveyor jam or feeding error */
+    if (result->grade == CNN_CLASS_BUSUK) {
+        /* Busuk (rotten) detected — reject immediately */
         is_anomaly = true;
-        printf("[UART] ALERT: Janjang Kosong (Empty Bunch) detected!\r\n");
+        printf("[UART] ALERT: Busuk (Rotten) detected!\r\n");
+    }
+
+    if (result->grade == CNN_CLASS_JANGKOS) {
+        /* Jangkos (empty bunch) detected — potential conveyor feeding error */
+        is_anomaly = true;
+        printf("[UART] ALERT: Jangkos (Empty Bunch) detected!\r\n");
     }
 
     if (result->confidence_pct < UART_COMM_MIN_CONFIDENCE_PCT) {

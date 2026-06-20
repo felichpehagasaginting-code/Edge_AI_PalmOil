@@ -38,7 +38,7 @@ PROJECT     := tbs_grader
 # ── MSDK Path ──────────────────────────────────────────────────────────────────
 # Update this to match your MSDK installation directory.
 # Override from command line: make MSDK_PATH=/path/to/msdk
-MSDK_PATH   ?= $(HOME)/MaximSDK
+MSDK_PATH   ?= $(HOME)/Felichs/msdk
 
 # Verify MSDK exists
 ifeq ($(wildcard $(MSDK_PATH)),)
@@ -47,28 +47,35 @@ ifeq ($(wildcard $(MSDK_PATH)),)
             or set MSDK_PATH= on the make command line.)
 endif
 
-# ── Toolchain (from MSDK) ──────────────────────────────────────────────────────
-TOOLCHAIN_PATH := $(MSDK_PATH)/Tools/GNUTools/10.3/bin
-CC   := $(TOOLCHAIN_PATH)/arm-none-eabi-gcc
-CXX  := $(TOOLCHAIN_PATH)/arm-none-eabi-g++
-AS   := $(TOOLCHAIN_PATH)/arm-none-eabi-gcc -x assembler-with-cpp
-LD   := $(TOOLCHAIN_PATH)/arm-none-eabi-gcc
-SIZE := $(TOOLCHAIN_PATH)/arm-none-eabi-size
-OBJCOPY := $(TOOLCHAIN_PATH)/arm-none-eabi-objcopy
-OBJDUMP := $(TOOLCHAIN_PATH)/arm-none-eabi-objdump
+# ── Toolchain (from MSDK or system PATH) ───────────────────────────────────────
+# Use system-wide arm-none-eabi-gcc if MSDK toolchain is not found.
+TOOLCHAIN_PATH := $(wildcard $(HOME)/Felichs/gcc-arm-none-eabi-10.3-2021.10/bin $(MSDK_PATH)/Tools/GNUTools/10.3/bin)
+ifneq ($(TOOLCHAIN_PATH),)
+    PREFIX := $(TOOLCHAIN_PATH)/
+else
+    PREFIX := 
+endif
+
+CC   := $(PREFIX)arm-none-eabi-gcc
+CXX  := $(PREFIX)arm-none-eabi-g++
+AS   := $(PREFIX)arm-none-eabi-gcc -x assembler-with-cpp
+LD   := $(PREFIX)arm-none-eabi-gcc
+SIZE := $(PREFIX)arm-none-eabi-size
+OBJCOPY := $(PREFIX)arm-none-eabi-objcopy
+OBJDUMP := $(PREFIX)arm-none-eabi-objdump
 
 # ── MSDK Libraries & Drivers ───────────────────────────────────────────────────
 MSDK_LIBS   := $(MSDK_PATH)/Libraries
 CMSIS_DIR   := $(MSDK_LIBS)/CMSIS
 PERIPH_DIR  := $(MSDK_LIBS)/PeriphDrivers
 BOARD_DIR   := $(MSDK_LIBS)/Boards/$(TARGET)/$(BOARD)
-CAMERA_LIB  := $(MSDK_LIBS)/Camera
+CAMERA_LIB  := $(MSDK_LIBS)/MiscDrivers/Camera
 
 # ── Source Files ───────────────────────────────────────────────────────────────
 # Project source files
 SRCS_C := \
     src/main.c          \
-    src/camera.c        \
+    src/cam_ov7692.c    \
     src/preprocess.c    \
     src/cnn_inference.c \
     src/uart_comm.c     \
@@ -76,22 +83,37 @@ SRCS_C := \
 
 # MSDK source files required for MAX78000
 SRCS_C += \
-    $(PERIPH_DIR)/Source/SYS/mxc_sys.c               \
-    $(PERIPH_DIR)/Source/GPIO/gpio_me17.c             \
+    $(PERIPH_DIR)/Source/SYS/sys_ai85.c               \
+    $(PERIPH_DIR)/Source/SYS/pins_ai85.c              \
+    $(PERIPH_DIR)/Source/GPIO/gpio_ai85.c             \
     $(PERIPH_DIR)/Source/GPIO/gpio_common.c           \
-    $(PERIPH_DIR)/Source/UART/uart_me17.c             \
+    $(PERIPH_DIR)/Source/GPIO/gpio_reva.c             \
+    $(PERIPH_DIR)/Source/UART/uart_ai85.c             \
     $(PERIPH_DIR)/Source/UART/uart_common.c           \
+    $(PERIPH_DIR)/Source/UART/uart_revb.c             \
     $(PERIPH_DIR)/Source/DMA/dma_me17.c               \
-    $(PERIPH_DIR)/Source/DMA/dma_common.c             \
+    $(PERIPH_DIR)/Source/DMA/dma_reva.c               \
     $(PERIPH_DIR)/Source/I2C/i2c_me17.c               \
-    $(PERIPH_DIR)/Source/CNN/cnn_me17.c               \
+    $(PERIPH_DIR)/Source/I2C/i2c_reva.c               \
     $(PERIPH_DIR)/Source/ICC/icc_me17.c               \
-    $(PERIPH_DIR)/Source/LP/lp_me17.c                 \
+    $(PERIPH_DIR)/Source/ICC/icc_reva.c               \
+    $(PERIPH_DIR)/Source/LP/lp_ai85.c                 \
+    $(PERIPH_DIR)/Source/SYS/mxc_delay.c              \
+    $(PERIPH_DIR)/Source/SYS/nvic_table.c             \
+    $(PERIPH_DIR)/Source/SYS/mxc_lock.c               \
+    $(PERIPH_DIR)/Source/PT/pt_ai85.c                 \
+    $(PERIPH_DIR)/Source/PT/pt_reva.c                 \
+    $(PERIPH_DIR)/Source/CAMERAIF/cameraif_ai85.c     \
+    $(PERIPH_DIR)/Source/CAMERAIF/cameraif_reva.c     \
+    $(CAMERA_LIB)/sccb.c                              \
     $(CAMERA_LIB)/camera.c                            \
     $(CAMERA_LIB)/ov7692.c                            \
     $(BOARD_DIR)/Source/board.c                       \
-    $(BOARD_DIR)/Source/led.c                         \
-    $(CMSIS_DIR)/Device/Maxim/$(TARGET)/Source/system_max78000.c
+    $(MSDK_LIBS)/MiscDrivers/LED/led.c                 \
+    $(MSDK_LIBS)/MiscDrivers/PushButton/pb.c           \
+    $(MSDK_LIBS)/MiscDrivers/PMIC/max20303.c           \
+    $(CMSIS_DIR)/Device/Maxim/$(TARGET)/Source/system_max78000.c \
+    $(CMSIS_DIR)/Device/Maxim/$(TARGET)/Source/heap.c
 
 # Startup assembly file (device-specific reset handler)
 SRCS_S := \
@@ -105,7 +127,22 @@ INCS := \
     -I$(CMSIS_DIR)/Device/Maxim/$(TARGET)/Include               \
     -I$(PERIPH_DIR)/Include/$(TARGET)                           \
     -I$(BOARD_DIR)/Include                                      \
-    -I$(CAMERA_LIB)
+    -I$(CAMERA_LIB)                                             \
+    -I$(MSDK_LIBS)/MiscDrivers/LED                              \
+    -I$(MSDK_LIBS)/MiscDrivers/Display                          \
+    -I$(MSDK_LIBS)/MiscDrivers/Display/fonts                    \
+    -I$(MSDK_LIBS)/MiscDrivers/Touchscreen                      \
+    -I$(MSDK_LIBS)/MiscDrivers/PushButton                       \
+    -I$(MSDK_LIBS)/MiscDrivers/PMIC                             \
+    -I$(PERIPH_DIR)/Source/DMA                                  \
+    -I$(PERIPH_DIR)/Source/I2C                                  \
+    -I$(PERIPH_DIR)/Source/ICC                                  \
+    -I$(PERIPH_DIR)/Source/GPIO                                 \
+    -I$(PERIPH_DIR)/Source/UART                                 \
+    -I$(PERIPH_DIR)/Source/SYS                                  \
+    -I$(PERIPH_DIR)/Source/LP                                   \
+    -I$(PERIPH_DIR)/Source/PT                                   \
+    -I$(PERIPH_DIR)/Source/CAMERAIF
 
 # ── Compiler Flags ─────────────────────────────────────────────────────────────
 # Architecture: ARM Cortex-M4F with hardware floating point (FPv4-SP)
@@ -115,6 +152,11 @@ ARCH_FLAGS := \
     -mfpu=fpv4-sp-d16      \
     -mfloat-abi=hard
 
+# ── Debug / Emulation Flags ───────────────────────────────────────────────────
+# Set to 1 to bypass physical camera sensor check (emulates with dummy frames).
+# Set to 0 when physical OV7692 camera is connected to the board.
+CAMERA_BYPASS ?= 1
+
 # Common compilation flags
 CFLAGS_COMMON := \
     $(ARCH_FLAGS)          \
@@ -122,6 +164,7 @@ CFLAGS_COMMON := \
     -DTARGET_REV=0x4131    \
     -DBOARD_FTHR_RevA      \
     -DMX_DEVICE_MAX78000   \
+    -DCAMERA_BYPASS=$(CAMERA_BYPASS) \
     $(INCS)                \
     -Wall                  \
     -Wextra                \
@@ -144,6 +187,9 @@ CFLAGS_RELEASE := $(CFLAGS_COMMON) \
 # Default to debug build
 CFLAGS := $(CFLAGS_DEBUG)
 
+# ── Build Output Directory ─────────────────────────────────────────────────────
+BUILD_DIR := build
+
 # ── Linker Flags ───────────────────────────────────────────────────────────────
 LINKER_SCRIPT := $(CMSIS_DIR)/Device/Maxim/$(TARGET)/Source/GCC/max78000.ld
 
@@ -156,9 +202,6 @@ LDFLAGS := \
     --specs=nano.specs     \
     --specs=nosys.specs    \
     -lm
-
-# ── Build Output Directory ─────────────────────────────────────────────────────
-BUILD_DIR := build
 
 # ── Object File Generation ─────────────────────────────────────────────────────
 OBJS_C := $(addprefix $(BUILD_DIR)/, $(notdir $(SRCS_C:.c=.o)))
@@ -226,22 +269,35 @@ size: $(BUILD_DIR)/$(PROJECT).elf
 	@echo "  SRAM:  128 KB (used by stack, heap, frame buffers)"
 	@echo ""
 
-# ── Flash via OpenOCD ─────────────────────────────────────────────────────────
-# Requires OpenOCD (included in MSDK Tools) and a MAX32625PICO debugger
-# connected to the MAX78000FTHR SWD port.
-OPENOCD := $(MSDK_PATH)/Tools/OpenOCD/openocd
+# ── Flash via DAPLink or OpenOCD ──────────────────────────────────────────────
+# Detects if DAPLink drive is mounted for drag-and-drop copy flashing
+DAPLINK_DIR := $(wildcard /run/media/$(USER)/DAPLINK /media/$(USER)/DAPLINK)
+OPENOCD     := $(MSDK_PATH)/Tools/OpenOCD/openocd
 OPENOCD_CFG := $(MSDK_PATH)/Tools/OpenOCD/scripts/board/max78000_fthr.cfg
 
+# Detect serial port (prefer ttyACM over ttyUSB)
+PORT ?= $(shell ls /dev/ttyACM* /dev/ttyUSB* 2>/dev/null | head -n 1)
+
 flash: $(BUILD_DIR)/$(PROJECT).bin
-	@echo "Flashing $(PROJECT).bin to MAX78000FTHR..."
-	$(OPENOCD) \
-	    -f $(OPENOCD_CFG) \
-	    -c "program $(BUILD_DIR)/$(PROJECT).elf verify reset exit"
+	@if [ -n "$(DAPLINK_DIR)" ]; then \
+	    echo "DAPLINK drive found at: $(DAPLINK_DIR)"; \
+	    echo "Flashing $(PROJECT).bin via file copy..."; \
+	    cp $(BUILD_DIR)/$(PROJECT).bin "$(DAPLINK_DIR)/"; \
+	    sync; \
+	    echo "Flash write complete! The board will reboot automatically."; \
+	else \
+	    echo "DAPLINK drive not found. Falling back to OpenOCD..."; \
+	    $(OPENOCD) -f $(OPENOCD_CFG) -c "program $(BUILD_DIR)/$(PROJECT).elf verify reset exit"; \
+	fi
 
 flash-and-monitor: flash
-	@echo "Opening serial monitor at 115200 baud..."
-	@echo "(Press Ctrl+A then Ctrl+X to exit picocom)"
-	picocom -b 115200 /dev/ttyUSB0
+	@if [ -z "$(PORT)" ]; then \
+	    echo "Error: No serial port (/dev/ttyACM* or /dev/ttyUSB*) found."; \
+	    exit 1; \
+	fi; \
+	echo "Opening serial monitor on $(PORT) at 115200 baud..." ; \
+	echo "(Press Ctrl+A then Ctrl+X to exit picocom)" ; \
+	picocom -b 115200 $(PORT)
 
 # ── Help ──────────────────────────────────────────────────────────────────────
 help:

@@ -26,8 +26,8 @@
  *   4. Access pixel data via camera_get_frame_buffer().
  */
 
-#ifndef CAMERA_H
-#define CAMERA_H
+#ifndef PROJECT_CAMERA_DRIVER_H
+#define PROJECT_CAMERA_DRIVER_H
 
 #include <stdint.h>
 #include <stdbool.h>
@@ -169,4 +169,4 @@ camera_status_t camera_enter_standby(void);
  */
 camera_status_t camera_exit_standby(void);
 
-#endif /* CAMERA_H */
+#endif /* PROJECT_CAMERA_DRIVER_H */

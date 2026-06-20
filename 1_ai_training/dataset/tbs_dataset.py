@@ -1,3 +1,4 @@
+"""Custom PyTorch Dataset for TBS (Tandan Buah Segar) image classification."""
 ###############################################################################
 # FILE: dataset/tbs_dataset.py
 # PROJECT: Edge AI Palm Oil FFB (TBS) Grading System
@@ -31,6 +32,8 @@
 ###############################################################################
 
 import logging
+import tempfile
+from collections import Counter
 from pathlib import Path
 from typing import Optional, Tuple, Dict, List
 
@@ -304,7 +307,7 @@ class TBSDataset(Dataset):
             FloatTensor of shape (NUM_CLASSES,) for use with
             nn.CrossEntropyLoss(weight=...).
         """
-        from collections import Counter
+
 
         label_counts = Counter(label for _, label in self.samples)
         total = len(self.samples)
@@ -385,9 +388,8 @@ def build_dataloaders(
 ###############################################################################
 
 def main() -> None:
-    # Quick sanity-check. Creates dummy dataset structure and verifies loading.
+    """Quick sanity-check with temporary dummy data structure."""
     # Run: python -m dataset.tbs_dataset
-    import tempfile
 
     print("Running TBSDataset self-test with temporary dummy data...")
 
@@ -434,7 +436,7 @@ def main() -> None:
         print(f"  Class weights       : {weights.tolist()}")
 
         # Test DataLoader
-        train_dl, val_dl = build_dataloaders(
+        train_dl, _val_dl = build_dataloaders(
             data_root=tmp_dir,
             batch_size=4,
             num_workers=0  # 0 for safe temp dir access in main process

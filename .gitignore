@@ -27,3 +27,7 @@ data/
 datasets/data/
 **/ai8x-training/
 **/ai8x-synthesis/
+
+# Local backup & config
+*.old
+.clangd

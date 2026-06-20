@@ -1,30 +1,31 @@
-###############################################################################
-# FILE: 5_web_dashboard/backend/api_server.py
-# PROJECT: Edge AI Palm Oil FFB (TBS) Grading System — Web Dashboard
-# DESCRIPTION:
-#   FastAPI REST API server that exposes TimescaleDB grading data to the
-#   web dashboard frontend. Provides endpoints for:
-#     - Today's production statistics
-#     - Recent scan events (live feed table)
-#     - Throughput trend (time-series for chart)
-#     - Grade distribution trend (hourly breakdown)
-#     - Gateway status
-#
-# ALL configuration via environment variables (Docker-friendly).
-#
-# ENDPOINTS:
-#   GET /health                        — Health check
-#   GET /api/stats/today               — Today's aggregated counts
-#   GET /api/events/recent?limit=50    — Latest N scan events
-#   GET /api/trend/throughput?minutes=30 — Throughput per-minute timeseries
-#   GET /api/trend/grades?hours=24     — Hourly grade breakdown
-#   GET /api/gateway/status            — Latest gateway heartbeat row
-###############################################################################
+"""
+FILE: 5_web_dashboard/backend/api_server.py
+PROJECT: Edge AI Palm Oil FFB (TBS) Grading System — Web Dashboard
+DESCRIPTION:
+  FastAPI REST API server that exposes TimescaleDB grading data to the
+  web dashboard frontend. Provides endpoints for:
+    - Today's production statistics
+    - Recent scan events (live feed table)
+    - Throughput trend (time-series for chart)
+    - Grade distribution trend (hourly breakdown)
+    - Gateway status
+
+  ALL configuration via environment variables (Docker-friendly).
+
+ENDPOINTS:
+  GET /health                        — Health check
+  GET /api/stats/today               — Today's aggregated counts
+  GET /api/events/recent?limit=50    — Latest N scan events
+  GET /api/trend/throughput?minutes=30 — Throughput per-minute timeseries
+  GET /api/trend/grades?hours=24     — Hourly grade breakdown
+  GET /api/gateway/status            — Latest gateway heartbeat row
+"""
 
 from __future__ import annotations
 
 import os
 import logging
+from datetime import datetime, timezone
 from contextlib import asynccontextmanager
 from typing import Any, AsyncIterator
 
@@ -55,7 +56,7 @@ DB_POOL_MAX = 10
 
 
 @asynccontextmanager
-async def lifespan(app: FastAPI) -> AsyncIterator[None]:
+async def lifespan(api_app: FastAPI) -> AsyncIterator[None]:
     """Create asyncpg connection pool on startup, close on shutdown."""
     dsn = (
         f"postgresql://{DB_USER}:{DB_PASSWORD}"
@@ -66,7 +67,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         DB_HOST, DB_PORT, DB_NAME
     )
     try:
-        app.state.pool = await asyncpg.create_pool(
+        api_app.state.pool = await asyncpg.create_pool(
             dsn=dsn,
             min_size=DB_POOL_MIN,
             max_size=DB_POOL_MAX,
@@ -79,7 +80,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
 
     yield  # App is running here
 
-    await app.state.pool.close()
+    await api_app.state.pool.close()
     logger.info("Database pool closed.")
 
 
@@ -110,7 +111,9 @@ async def _query(sql: str, *args: Any) -> list[dict]:
             return [dict(row) for row in rows]
     except asyncpg.PostgresError as exc:
         logger.error("DB query failed: %s\nSQL: %s", exc, sql[:200])
-        raise HTTPException(status_code=503, detail="Database query failed")
+        raise HTTPException(
+            status_code=503, detail="Database query failed"
+        ) from exc
 
 
 async def _query_one(sql: str, *args: Any) -> dict | None:
@@ -121,7 +124,9 @@ async def _query_one(sql: str, *args: Any) -> dict | None:
             return dict(row) if row else None
     except asyncpg.PostgresError as exc:
         logger.error("DB query_one failed: %s\nSQL: %s", exc, sql[:200])
-        raise HTTPException(status_code=503, detail="Database query failed")
+        raise HTTPException(
+            status_code=503, detail="Database query failed"
+        ) from exc
 
 
 # ── Endpoints ────────────────────────────────────────────────────────────────
@@ -134,7 +139,9 @@ async def health_check() -> dict:
             await conn.fetchval("SELECT 1")
         return {"status": "ok", "db": "connected"}
     except Exception as exc:
-        raise HTTPException(status_code=503, detail=f"DB unreachable: {exc}")
+        raise HTTPException(
+            status_code=503, detail=f"DB unreachable: {exc}"
+        ) from exc
 
 
 @app.get("/api/stats/today")
@@ -154,17 +161,17 @@ async def stats_today() -> dict:
     """
     sql = """
         SELECT
-            COUNT(*)                                            AS total_scanned,
-            COUNT(*) FILTER (WHERE grade = 0)                  AS mentah_count,
-            COUNT(*) FILTER (WHERE grade = 1)                  AS matang_count,
-            COUNT(*) FILTER (WHERE grade = 2)                  AS overripe_count,
-            COUNT(*) FILTER (WHERE grade = 3)                  AS janjang_count,
-            COUNT(*) FILTER (WHERE is_anomaly)                 AS anomaly_count,
-            ROUND(AVG(confidence_pct), 1)                      AS avg_confidence,
+            COUNT(*) AS total_scanned,
+            COUNT(*) FILTER (WHERE grade = 0) AS mentah_count,
+            COUNT(*) FILTER (WHERE grade = 1) AS matang_count,
+            COUNT(*) FILTER (WHERE grade = 2) AS overripe_count,
+            COUNT(*) FILTER (WHERE grade = 3) AS janjang_count,
+            COUNT(*) FILTER (WHERE is_anomaly) AS anomaly_count,
+            ROUND(AVG(confidence_pct), 1) AS avg_confidence,
             ROUND(
                 100.0 * COUNT(*) FILTER (WHERE grade = 1)
                 / NULLIF(COUNT(*), 0),
-            1)                                                 AS matang_rate_pct
+            1) AS matang_rate_pct
         FROM grading_events
         WHERE event_time >= CURRENT_DATE
     """
@@ -260,7 +267,7 @@ async def trend_grades(
             COUNT(*) FILTER (WHERE grade = 0)                    AS mentah,
             COUNT(*) FILTER (WHERE grade = 1)                    AS matang,
             COUNT(*) FILTER (WHERE grade = 2)                    AS overripe,
-            COUNT(*) FILTER (WHERE grade = 3)                    AS janjang_kosong
+            COUNT(*) FILTER (WHERE grade = 3) AS janjang_kosong
         FROM grading_events
         WHERE event_time >= NOW() - ($1 || ' hours')::INTERVAL
         GROUP BY bucket
@@ -298,7 +305,6 @@ async def gateway_status() -> dict:
     if row.get("event_time"):
         row["event_time"] = row["event_time"].isoformat()
     # Flag if last heartbeat is stale (> 90 seconds)
-    from datetime import datetime, timezone
     if row.get("event_time"):
         last_seen = datetime.fromisoformat(row["event_time"])
         if last_seen.tzinfo is None:

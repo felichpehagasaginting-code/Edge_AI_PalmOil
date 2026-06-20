@@ -366,8 +366,10 @@ body::before {
 
 /* Dynamic badge colour via CSS variable */
 #lastScanGrade {
+  background: rgba(var(--badge-color-rgb, 0, 255, 157), 0.15);
   background: color-mix(in srgb, var(--badge-color, var(--clr-primary)) 15%, transparent);
   color:      var(--badge-color, var(--clr-primary));
+  border-color: rgba(var(--badge-color-rgb, 0, 255, 157), 0.3);
   border-color: color-mix(in srgb, var(--badge-color, var(--clr-primary)) 30%, transparent);
   font-size: 1rem;
   padding: 6px 14px;
@@ -548,8 +550,10 @@ body::before {
   border-radius: var(--radius-xs);
   font-size:     0.75rem;
   font-weight:   600;
+  background:    rgba(var(--badge-color-rgb, 0, 255, 157), 0.12);
   background:    color-mix(in srgb, var(--badge-color, var(--clr-primary)) 12%, transparent);
   color:         var(--badge-color, var(--clr-primary));
+  border:        1px solid rgba(var(--badge-color-rgb, 0, 255, 157), 0.25);
   border:        1px solid color-mix(in srgb, var(--badge-color, var(--clr-primary)) 25%, transparent);
 }
 
@@ -1073,6 +1077,7 @@ body::before {
   border-radius: var(--radius-sm);
   border: 1px solid var(--border);
   transition: all 0.25s ease;
+  -webkit-user-select: none;
   user-select: none;
 }
 

@@ -1,36 +1,39 @@
 #!/usr/bin/env python3
-###############################################################################
-# FILE: mqtt_to_db/mqtt_to_db.py
-# PROJECT: Edge AI Palm Oil FFB (TBS) Grading System — Server Backend
-# DESCRIPTION:
-#   Lightweight, robust Python daemon that:
-#     1. Subscribes to MQTT topic: pks/grading/tbs/result
-#     2. Parses each incoming JSON payload from the ESP-12E gateway
-#     3. Inserts a row into the TimescaleDB grading_events hypertable
-#     4. Subscribes to pks/grading/tbs/status for gateway heartbeat logging
-#
-#   Runs as a Docker container service with automatic restart on failure.
-#   Handles MQTT reconnection, database connection pooling, and
-#   structured logging for production observability.
-#
-# ENVIRONMENT VARIABLES (set in docker-compose.yml):
-#   MQTT_BROKER_HOST  — Mosquitto hostname (default: mosquitto)
-#   MQTT_BROKER_PORT  — Mosquitto port (default: 1883)
-#   MQTT_USERNAME     — MQTT auth username
-#   MQTT_PASSWORD     — MQTT auth password
-#   MQTT_TOPIC        — Topic to subscribe (default: pks/grading/tbs/result)
-#   DB_HOST           — TimescaleDB hostname (default: timescaledb)
-#   DB_PORT           — Database port (default: 5432)
-#   DB_NAME           — Database name (default: grading_db)
-#   DB_USER           — Database user (default: tbs_user)
-#   DB_PASSWORD       — Database password
-#   LOG_LEVEL         — Logging level (DEBUG/INFO/WARNING, default: INFO)
-#   CONFIDENCE_ANOMALY_THRESHOLD — Min confidence % to flag anomaly (default: 60)
-#
-# TOPIC PROTOCOL:
-#   pks/grading/tbs/result  ← {"g":<grade>,"c":<confidence>,"ts":<ms>,"cnt":<n>}
-#   pks/grading/tbs/status  ← {"status":"online","uptime":<ms>,"ip":"...","rssi":<dBm>}
-###############################################################################
+"""
+FILE: mqtt_to_db/mqtt_to_db.py
+PROJECT: Edge AI Palm Oil FFB (TBS) Grading System — Server Backend
+DESCRIPTION:
+  Lightweight, robust Python daemon that:
+    1. Subscribes to MQTT topic: pks/grading/tbs/result
+    2. Parses each incoming JSON payload from the ESP-12E gateway
+    3. Inserts a row into the TimescaleDB grading_events hypertable
+    4. Subscribes to pks/grading/tbs/status for gateway heartbeat logging
+
+  Runs as a Docker container service with automatic restart on failure.
+  Handles MQTT reconnection, database connection pooling, and
+  structured logging for production observability.
+
+ENVIRONMENT VARIABLES (set in docker-compose.yml):
+  MQTT_BROKER_HOST  — Mosquitto hostname (default: mosquitto)
+  MQTT_BROKER_PORT  — Mosquitto port (default: 1883)
+  MQTT_USERNAME     — MQTT auth username
+  MQTT_PASSWORD     — MQTT auth password
+  MQTT_TOPIC        — Topic to subscribe (default: pks/grading/tbs/result)
+  DB_HOST           — TimescaleDB hostname (default: timescaledb)
+  DB_PORT           — Database port (default: 5432)
+  DB_NAME           — Database name (default: grading_db)
+  DB_USER           — Database user (default: tbs_user)
+  DB_PASSWORD       — Database password
+  LOG_LEVEL         — Logging level (DEBUG/INFO/WARNING, default: INFO)
+  CONFIDENCE_ANOMALY_THRESHOLD — Min confidence % to flag anomaly
+                                 (default: 60)
+
+TOPIC PROTOCOL:
+  pks/grading/tbs/result  ← {"g":<grade>,"c":<confidence>,
+                             "ts":<ms>,"cnt":<n>}
+  pks/grading/tbs/status  ← {"status":"online","uptime":<ms>,
+                             "ip":"...","rssi":<dBm>}
+"""
 
 import os
 import sys
@@ -53,7 +56,7 @@ import psycopg2.extras
 ###############################################################################
 
 LOG_LEVEL_STR = os.getenv("LOG_LEVEL", "INFO").upper()
-LOG_LEVEL     = getattr(logging, LOG_LEVEL_STR, logging.INFO)
+LOG_LEVEL = getattr(logging, LOG_LEVEL_STR, logging.INFO)
 
 logging.basicConfig(
     level=LOG_LEVEL,
@@ -70,6 +73,7 @@ logger = logging.getLogger("mqtt_to_db")
 # Configuration (from environment variables)
 ###############################################################################
 
+
 class Config:
     """
     All configuration is read from environment variables, consistent with
@@ -79,28 +83,30 @@ class Config:
     # ── MQTT ─────────────────────────────────────────────────────────────────
     MQTT_BROKER_HOST: str = os.getenv("MQTT_BROKER_HOST", "mosquitto")
     MQTT_BROKER_PORT: int = int(os.getenv("MQTT_BROKER_PORT", "1883"))
-    MQTT_USERNAME:    str = os.getenv("MQTT_USERNAME",   "iot_gateway")
-    MQTT_PASSWORD:    str = os.getenv("MQTT_PASSWORD",   "secure_mqtt_pass")
-    MQTT_CLIENT_ID:   str = "mqtt_to_db_daemon_001"
-    MQTT_KEEPALIVE:   int = 60          # seconds
-    MQTT_QOS:         int = 1           # Subscribe at QoS 1 for at-least-once
+    MQTT_USERNAME: str = os.getenv("MQTT_USERNAME", "iot_gateway")
+    MQTT_PASSWORD: str = os.getenv("MQTT_PASSWORD", "secure_mqtt_pass")
+    MQTT_CLIENT_ID: str = "mqtt_to_db_daemon_001"
+    MQTT_KEEPALIVE: int = 60          # seconds
+    MQTT_QOS: int = 1           # Subscribe at QoS 1 for at-least-once
 
     # Topics to subscribe
-    MQTT_TOPIC_RESULT: str = os.getenv("MQTT_TOPIC", "pks/grading/tbs/result")
+    MQTT_TOPIC_RESULT: str = os.getenv(
+        "MQTT_TOPIC", "pks/grading/tbs/result"
+    )
     MQTT_TOPIC_STATUS: str = "pks/grading/tbs/status"
 
-    # ── Database ──────────────────────────────────────────────────────────────
-    DB_HOST:     str = os.getenv("DB_HOST",     "timescaledb")
-    DB_PORT:     int = int(os.getenv("DB_PORT", "5432"))
-    DB_NAME:     str = os.getenv("DB_NAME",     "grading_db")
-    DB_USER:     str = os.getenv("DB_USER",     "tbs_user")
+    # ── Database ─────────────────────────────────────────────────────────────
+    DB_HOST: str = os.getenv("DB_HOST", "timescaledb")
+    DB_PORT: int = int(os.getenv("DB_PORT", "5432"))
+    DB_NAME: str = os.getenv("DB_NAME", "grading_db")
+    DB_USER: str = os.getenv("DB_USER", "tbs_user")
     DB_PASSWORD: str = os.getenv("DB_PASSWORD", "secure_db_pass_123")
 
     # Connection pool: min 1, max 5 connections
-    DB_POOL_MIN:  int = 1
-    DB_POOL_MAX:  int = 5
+    DB_POOL_MIN: int = 1
+    DB_POOL_MAX: int = 5
 
-    # ── Business Logic ────────────────────────────────────────────────────────
+    # ── Business Logic ───────────────────────────────────────────────────────
     # Grade index for "Janjang Kosong" (empty bunch) — triggers anomaly flag
     JANJANG_KOSONG_GRADE: int = 3
 
@@ -112,12 +118,12 @@ class Config:
     # Device ID prefix for sensor_id field in database
     SENSOR_ID: str = "TBS_SCANNER_001"
 
-    # ── Reconnection Policy ───────────────────────────────────────────────────
+    # ── Reconnection Policy ──────────────────────────────────────────────────
     MQTT_RECONNECT_DELAY_MIN: float = 1.0    # Start with 1s
     MQTT_RECONNECT_DELAY_MAX: float = 60.0   # Cap at 60s (exponential backoff)
-    DB_RECONNECT_DELAY:       float = 5.0    # 5s between DB reconnect attempts
+    DB_RECONNECT_DELAY: float = 5.0    # 5s between DB reconnect attempts
 
-    # ── Grade Name Lookup ─────────────────────────────────────────────────────
+    # ── Grade Name Lookup ────────────────────────────────────────────────────
     GRADE_NAMES: Dict[int, str] = {
         0: "Mentah",
         1: "Matang",
@@ -180,17 +186,20 @@ class DatabaseManager:
                     dsn=dsn
                 )
             logger.info(
-                f"Database pool established: {Config.DB_HOST}:{Config.DB_PORT}/"
-                f"{Config.DB_NAME} (pool: {Config.DB_POOL_MIN}-{Config.DB_POOL_MAX})"
+                "Database pool established: %s:%s/%s (pool: %s-%s)",
+                Config.DB_HOST, Config.DB_PORT, Config.DB_NAME,
+                Config.DB_POOL_MIN, Config.DB_POOL_MAX
             )
             return True
 
         except psycopg2.Error as e:
-            logger.error(f"Database connection failed: {e}")
+            logger.error("Database connection failed: %s", e)
             return False
 
     def is_connected(self) -> bool:
-        """Returns True if the pool is initialized and has available connections."""
+        """Returns True if the pool is initialized and has available
+        connections.
+        """
         return self._pool is not None
 
     def get_connection(self):
@@ -203,7 +212,9 @@ class DatabaseManager:
         return self._pool.getconn()
 
     def return_connection(self, conn, failed: bool = False):
-        """Return a connection to the pool. Mark as failed if it had an error."""
+        """Return a connection to the pool. Mark as failed if it had
+        an error.
+        """
         if self._pool and conn:
             self._pool.putconn(conn, close=failed)
 
@@ -270,19 +281,18 @@ class DatabaseManager:
             conn.commit()
 
             logger.info(
-                f"DB INSERT: grade={grade} ({grade_name}), "
-                f"confidence={confidence_pct}%, "
-                f"anomaly={is_anomaly}, "
-                f"transport={transport}"
+                "DB INSERT: grade=%s (%s), confidence=%s%%, "
+                "anomaly=%s, transport=%s",
+                grade, grade_name, confidence_pct, is_anomaly, transport
             )
             return True
 
         except psycopg2.Error as e:
-            logger.error(f"DB INSERT failed: {e}")
+            logger.error("DB INSERT failed: %s", e)
             if conn:
                 try:
                     conn.rollback()
-                except Exception:
+                except Exception:  # pylint: disable=broad-except
                     pass
             self.return_connection(conn, failed=True)
             conn = None  # Prevent double-return in finally
@@ -303,7 +313,8 @@ class DatabaseManager:
         gateway_id: str = "ESP_TBS_GW_001"
     ) -> bool:
         """
-        Insert a gateway heartbeat/status record into the gateway_status hypertable.
+        Insert a gateway heartbeat/status record into the
+        gateway_status hypertable.
         """
         event_time = datetime.now(timezone.utc)
 
@@ -323,15 +334,15 @@ class DatabaseManager:
                     wifi_rssi_dbm, lora_status, uptime_sec, total_scans
                 ))
             conn.commit()
-            logger.debug(f"Gateway status logged: {status} ({gateway_id})")
+            logger.debug("Gateway status logged: %s (%s)", status, gateway_id)
             return True
 
         except psycopg2.Error as e:
-            logger.error(f"Gateway status INSERT failed: {e}")
+            logger.error("Gateway status INSERT failed: %s", e)
             if conn:
                 try:
                     conn.rollback()
-                except Exception:
+                except Exception:  # pylint: disable=broad-except
                     pass
             self.return_connection(conn, failed=True)
             conn = None
@@ -368,24 +379,30 @@ class MqttToDbDaemon:
             "started_at":         datetime.now(timezone.utc).isoformat()
         }
 
-    def _on_connect(self, client, userdata, flags, rc):
-        """
-        MQTT connection callback. Called when the client connects to the broker.
+    def _on_connect(self, _client, _userdata, _flags, rc):
+        """MQTT connection callback.
+
+        Called when the client connects to the broker.
         rc: 0=Connected, non-zero=Error (see paho-mqtt rc codes).
         """
         if rc == 0:
             logger.info(
-                f"MQTT connected to {Config.MQTT_BROKER_HOST}:{Config.MQTT_BROKER_PORT}"
+                "MQTT connected to %s:%s",
+                Config.MQTT_BROKER_HOST, Config.MQTT_BROKER_PORT
             )
             self._reconnect_delay = Config.MQTT_RECONNECT_DELAY_MIN
 
             # Subscribe to result topic (QoS 1: at-least-once delivery)
-            client.subscribe(Config.MQTT_TOPIC_RESULT, qos=Config.MQTT_QOS)
-            logger.info(f"Subscribed to: {Config.MQTT_TOPIC_RESULT} (QoS {Config.MQTT_QOS})")
+            _client.subscribe(Config.MQTT_TOPIC_RESULT, qos=Config.MQTT_QOS)
+            logger.info(
+                "Subscribed to: %s (QoS %s)",
+                Config.MQTT_TOPIC_RESULT,
+                Config.MQTT_QOS
+            )
 
             # Subscribe to status topic (QoS 0: best effort for heartbeats)
-            client.subscribe(Config.MQTT_TOPIC_STATUS, qos=0)
-            logger.info(f"Subscribed to: {Config.MQTT_TOPIC_STATUS} (QoS 0)")
+            _client.subscribe(Config.MQTT_TOPIC_STATUS, qos=0)
+            logger.info("Subscribed to: %s (QoS 0)", Config.MQTT_TOPIC_STATUS)
 
         else:
             rc_messages = {
@@ -396,10 +413,11 @@ class MqttToDbDaemon:
                 5: "Not authorized"
             }
             logger.error(
-                f"MQTT connection refused: {rc_messages.get(rc, f'Unknown error {rc}')}"
+                "MQTT connection refused: %s",
+                rc_messages.get(rc, f"Unknown error {rc}")
             )
 
-    def _on_disconnect(self, client, userdata, rc):
+    def _on_disconnect(self, _client, _userdata, rc):
         """
         MQTT disconnection callback. paho-mqtt will automatically attempt
         reconnection (reconnect_delay_set was called in start()).
@@ -408,8 +426,9 @@ class MqttToDbDaemon:
             logger.info("MQTT disconnected gracefully.")
         else:
             logger.warning(
-                f"MQTT unexpected disconnect (rc={rc}). "
-                f"Auto-reconnecting in {self._reconnect_delay:.1f}s..."
+                "MQTT unexpected disconnect (rc=%s). "
+                "Auto-reconnecting in %.1fs...",
+                rc, self._reconnect_delay
             )
             # Exponential backoff for reconnect delay
             self._reconnect_delay = min(
@@ -417,18 +436,19 @@ class MqttToDbDaemon:
                 Config.MQTT_RECONNECT_DELAY_MAX
             )
 
-    def _on_message(self, client, userdata, msg: mqtt.MQTTMessage):
-        """
-        MQTT message callback. Called for every received message on subscribed topics.
+    def _on_message(self, _client, _userdata, msg: mqtt.MQTTMessage):
+        """MQTT message callback.
+
+        Called for every received message on subscribed topics.
         Runs in the paho-mqtt network loop thread.
         """
-        topic   = msg.topic
+        topic = msg.topic
         payload = msg.payload.decode("utf-8", errors="replace").strip()
 
-        logger.debug(f"MQTT message: topic={topic}, payload={payload}")
+        logger.debug("MQTT message: topic=%s, payload=%s", topic, payload)
         self._stats["messages_received"] += 1
 
-        # ── Dispatch by topic ─────────────────────────────────────────────────
+        # ── Dispatch by topic ────────────────────────────────────────────────
         if topic == Config.MQTT_TOPIC_RESULT:
             self._handle_grading_result(payload)
 
@@ -436,77 +456,86 @@ class MqttToDbDaemon:
             self._handle_gateway_status(payload)
 
         else:
-            logger.warning(f"Received message on unexpected topic: {topic}")
+            logger.warning("Received message on unexpected topic: %s", topic)
 
     def _handle_grading_result(self, payload: str) -> None:
         """
         Parse and persist a grading result payload.
 
         Expected JSON format:
-            {"g":<grade>,"c":<confidence>,"ts":<esp_uptime_ms>,"cnt":<scan_count>}
+            {"g":<grade>,"c":<confidence>,"ts":<esp_uptime_ms>,
+             "cnt":<scan_count>}
         """
-        # ── Parse JSON ────────────────────────────────────────────────────────
+        # ── Parse JSON ───────────────────────────────────────────────────────
         try:
             data: Dict[str, Any] = json.loads(payload)
         except json.JSONDecodeError as e:
-            logger.error(f"JSON parse error: {e} | payload='{payload}'")
+            logger.error("JSON parse error: %s | payload='%s'", e, payload)
             self._stats["parse_errors"] += 1
             return
 
         # ── Validate required fields ───────────────────────────────────────
-        grade      = data.get("g")
+        grade = data.get("g")
         confidence = data.get("c")
 
         if grade is None or confidence is None:
-            logger.error(f"Missing required fields in payload: {payload}")
+            logger.error("Missing required fields in payload: %s", payload)
             self._stats["parse_errors"] += 1
             return
 
         # Type validation and bounds checking
         try:
-            grade      = int(grade)
+            grade = int(grade)
             confidence = int(confidence)
         except (ValueError, TypeError) as e:
-            logger.error(f"Field type conversion error: {e} | payload='{payload}'")
+            logger.error(
+                "Field type conversion error: %s | payload='%s'",
+                e, payload
+            )
             self._stats["parse_errors"] += 1
             return
 
-        if not (0 <= grade <= 3):
-            logger.error(f"Invalid grade value: {grade} (expected 0-3) | payload='{payload}'")
+        if not 0 <= grade <= 3:
+            logger.error(
+                "Invalid grade value: %s (expected 0-3) | payload='%s'",
+                grade, payload
+            )
             self._stats["parse_errors"] += 1
             return
 
-        if not (0 <= confidence <= 100):
-            logger.error(f"Invalid confidence: {confidence} (expected 0-100)")
+        if not 0 <= confidence <= 100:
+            logger.error("Invalid confidence: %s (expected 0-100)", confidence)
             self._stats["parse_errors"] += 1
             return
 
         # ── Extract optional fields ────────────────────────────────────────
         esp_uptime_ms: Optional[int] = data.get("ts")
-        scan_count:    Optional[int] = data.get("cnt")
+        scan_count: Optional[int] = data.get("cnt")
 
         # Determine anomaly flag
         anomaly = Config.is_anomaly(grade, confidence)
 
         if anomaly:
             logger.warning(
-                f"ANOMALY DETECTED: grade={grade} ({Config.grade_to_name(grade)}), "
-                f"confidence={confidence}%"
+                "ANOMALY DETECTED: grade=%s (%s), confidence=%s%%",
+                grade, Config.grade_to_name(grade), confidence
             )
 
         # ── Database insertion ─────────────────────────────────────────────
         if not self.db.is_connected():
-            logger.error("Database not connected — attempting reconnect before insert.")
+            logger.error(
+                "Database not connected — attempting reconnect before insert."
+            )
             self._reconnect_database()
 
         success = self.db.insert_grading_event(
-            grade          = grade,
-            confidence_pct = confidence,
-            is_anomaly     = anomaly,
-            transport      = "wifi_mqtt",
-            esp_uptime_ms  = esp_uptime_ms,
-            scan_count     = scan_count,
-            raw_payload    = payload
+            grade=grade,
+            confidence_pct=confidence,
+            is_anomaly=anomaly,
+            transport="wifi_mqtt",
+            esp_uptime_ms=esp_uptime_ms,
+            scan_count=scan_count,
+            raw_payload=payload
         )
 
         if success:
@@ -514,8 +543,8 @@ class MqttToDbDaemon:
         else:
             self._stats["inserts_failed"] += 1
             logger.error(
-                f"DB insertion failed for payload: {payload} — "
-                f"total failures: {self._stats['inserts_failed']}"
+                "DB insertion failed for payload: %s — total failures: %s",
+                payload, self._stats['inserts_failed']
             )
 
     def _handle_gateway_status(self, payload: str) -> None:
@@ -523,33 +552,34 @@ class MqttToDbDaemon:
         try:
             data: Dict[str, Any] = json.loads(payload)
         except json.JSONDecodeError as e:
-            logger.warning(f"Gateway status JSON parse error: {e}")
+            logger.warning("Gateway status JSON parse error: %s", e)
             return
 
-        status        = data.get("status", "unknown")
-        ip_address    = data.get("ip")
+        status = data.get("status", "unknown")
+        ip_address = data.get("ip")
         wifi_rssi_dbm = data.get("rssi")
-        lora_status   = data.get("lora", "unknown")
-        total_scans   = data.get("scans")
+        lora_status = data.get("lora", "unknown")
+        total_scans = data.get("scans")
 
         # Convert uptime from ms to seconds for the DB field
         uptime_ms = data.get("uptime")
         uptime_sec = int(uptime_ms / 1000) if uptime_ms is not None else None
 
         logger.info(
-            f"Gateway status: {status}, IP={ip_address}, "
-            f"RSSI={wifi_rssi_dbm} dBm, LoRa={lora_status}, "
-            f"uptime={uptime_sec}s, scans={total_scans}"
+            "Gateway status: %s, IP=%s, RSSI=%s dBm, "
+            "LoRa=%s, uptime=%ss, scans=%s",
+            status, ip_address, wifi_rssi_dbm, lora_status,
+            uptime_sec, total_scans
         )
 
         if self.db.is_connected():
             self.db.insert_gateway_status(
-                status        = status,
-                ip_address    = ip_address,
-                wifi_rssi_dbm = wifi_rssi_dbm,
-                lora_status   = lora_status,
-                uptime_sec    = uptime_sec,
-                total_scans   = total_scans
+                status=status,
+                ip_address=ip_address,
+                wifi_rssi_dbm=wifi_rssi_dbm,
+                lora_status=lora_status,
+                uptime_sec=uptime_sec,
+                total_scans=total_scans
             )
 
     def _reconnect_database(self) -> None:
@@ -557,48 +587,68 @@ class MqttToDbDaemon:
         logger.info("Attempting database reconnect...")
         for attempt in range(5):
             if self.db.connect():
-                logger.info(f"Database reconnected on attempt {attempt + 1}.")
+                logger.info("Database reconnected on attempt %s.", attempt + 1)
                 return
             logger.warning(
-                f"DB reconnect attempt {attempt + 1}/5 failed. "
-                f"Retrying in {Config.DB_RECONNECT_DELAY}s..."
+                "DB reconnect attempt %s/5 failed. Retrying in %ss...",
+                attempt + 1, Config.DB_RECONNECT_DELAY
             )
             time.sleep(Config.DB_RECONNECT_DELAY)
-        logger.error("All DB reconnect attempts failed. Continuing without persistence.")
+        logger.error(
+            "All DB reconnect attempts failed. "
+            "Continuing without persistence."
+        )
 
     def _print_stats(self):
         """Log runtime statistics for observability."""
         logger.info(
-            f"Stats | received={self._stats['messages_received']}, "
-            f"inserted={self._stats['inserts_successful']}, "
-            f"failed={self._stats['inserts_failed']}, "
-            f"parse_errors={self._stats['parse_errors']}"
+            "Stats | received=%s, inserted=%s, failed=%s, parse_errors=%s",
+            self._stats['messages_received'],
+            self._stats['inserts_successful'],
+            self._stats['inserts_failed'],
+            self._stats['parse_errors']
         )
 
     def start(self) -> None:
         """Initialize all connections and start the daemon event loop."""
         logger.info("Starting mqtt_to_db daemon...")
-        logger.info(f"  MQTT: {Config.MQTT_BROKER_HOST}:{Config.MQTT_BROKER_PORT}")
-        logger.info(f"  DB:   {Config.DB_HOST}:{Config.DB_PORT}/{Config.DB_NAME}")
-        logger.info(f"  Topics: {Config.MQTT_TOPIC_RESULT}, {Config.MQTT_TOPIC_STATUS}")
-        logger.info(f"  Anomaly threshold: confidence < {Config.CONFIDENCE_ANOMALY_THRESHOLD}%")
+        logger.info(
+            "  MQTT: %s:%s",
+            Config.MQTT_BROKER_HOST, Config.MQTT_BROKER_PORT
+        )
+        logger.info(
+            "  DB:   %s:%s/%s",
+            Config.DB_HOST, Config.DB_PORT, Config.DB_NAME
+        )
+        logger.info(
+            "  Topics: %s, %s",
+            Config.MQTT_TOPIC_RESULT, Config.MQTT_TOPIC_STATUS
+        )
+        logger.info(
+            "  Anomaly threshold: confidence < %s%%",
+            Config.CONFIDENCE_ANOMALY_THRESHOLD
+        )
 
         # ── Connect to Database ────────────────────────────────────────────
         logger.info("Connecting to TimescaleDB...")
         while not self.db.connect():
             logger.warning(
-                f"DB not ready — retrying in {Config.DB_RECONNECT_DELAY}s..."
+                "DB not ready — retrying in %ss...",
+                Config.DB_RECONNECT_DELAY
             )
             time.sleep(Config.DB_RECONNECT_DELAY)
 
         # ── Configure MQTT Client ─────────────────────────────────────────
         self.mqtt_client = mqtt.Client(
-            client_id         = Config.MQTT_CLIENT_ID,
-            clean_session     = True,
-            protocol          = mqtt.MQTTv311
+            client_id=Config.MQTT_CLIENT_ID,
+            clean_session=True,
+            protocol=mqtt.MQTTv311
         )
 
-        self.mqtt_client.username_pw_set(Config.MQTT_USERNAME, Config.MQTT_PASSWORD)
+        self.mqtt_client.username_pw_set(
+            Config.MQTT_USERNAME,
+            Config.MQTT_PASSWORD
+        )
 
         # Set Last Will & Testament (LWT) for daemon crash detection
         lwt_payload = json.dumps({
@@ -607,24 +657,24 @@ class MqttToDbDaemon:
         })
         self.mqtt_client.will_set(
             Config.MQTT_TOPIC_STATUS,
-            payload  = lwt_payload,
-            qos      = 0,
-            retain   = False
+            payload=lwt_payload,
+            qos=0,
+            retain=False
         )
 
         # Assign callbacks
-        self.mqtt_client.on_connect    = self._on_connect
+        self.mqtt_client.on_connect = self._on_connect
         self.mqtt_client.on_disconnect = self._on_disconnect
-        self.mqtt_client.on_message    = self._on_message
+        self.mqtt_client.on_message = self._on_message
 
         # Configure automatic reconnection (exponential backoff 1s→60s)
         self.mqtt_client.reconnect_delay_set(
-            min_delay = int(Config.MQTT_RECONNECT_DELAY_MIN),
-            max_delay = int(Config.MQTT_RECONNECT_DELAY_MAX)
+            min_delay=int(Config.MQTT_RECONNECT_DELAY_MIN),
+            max_delay=int(Config.MQTT_RECONNECT_DELAY_MAX)
         )
 
         # ── Connect to Mosquitto ───────────────────────────────────────────
-        logger.info(f"Connecting to MQTT broker {Config.MQTT_BROKER_HOST}...")
+        logger.info("Connecting to MQTT broker %s...", Config.MQTT_BROKER_HOST)
         while True:
             try:
                 self.mqtt_client.connect(
@@ -635,8 +685,8 @@ class MqttToDbDaemon:
                 break
             except (ConnectionRefusedError, OSError) as e:
                 logger.warning(
-                    f"MQTT connect failed: {e}. "
-                    f"Retrying in {Config.MQTT_RECONNECT_DELAY_MIN}s..."
+                    "MQTT connect failed: %s. Retrying in %ss...",
+                    e, Config.MQTT_RECONNECT_DELAY_MIN
                 )
                 time.sleep(Config.MQTT_RECONNECT_DELAY_MIN)
 
@@ -651,7 +701,7 @@ class MqttToDbDaemon:
         logger.info("mqtt_to_db daemon running. Press Ctrl+C to stop.")
 
         # ── Main Thread: Periodic Statistics Logging ───────────────────────
-        STATS_INTERVAL_SEC = 300  # Log stats every 5 minutes
+        stats_interval_sec = 300  # Log stats every 5 minutes
         last_stats_time = time.monotonic()
 
         try:
@@ -659,7 +709,7 @@ class MqttToDbDaemon:
                 time.sleep(1)
 
                 # Periodic stats logging
-                if (time.monotonic() - last_stats_time) >= STATS_INTERVAL_SEC:
+                if (time.monotonic() - last_stats_time) >= stats_interval_sec:
                     self._print_stats()
                     last_stats_time = time.monotonic()
 
@@ -689,19 +739,19 @@ class MqttToDbDaemon:
 
 _daemon: Optional[MqttToDbDaemon] = None
 
-def _signal_handler(signum, frame):
+
+def _signal_handler(signum, _frame):
     """Handle SIGTERM (Docker stop) and SIGINT (Ctrl+C) for graceful exit."""
     sig_name = signal.Signals(signum).name
-    logger.info(f"Received signal {sig_name} — initiating graceful shutdown.")
+    logger.info("Received signal %s — initiating graceful shutdown.", sig_name)
     if _daemon:
         _daemon.stop()
     sys.exit(0)
 
-###############################################################################
-# Entry Point
-###############################################################################
+
 
 if __name__ == "__main__":
+
     # Register signal handlers for graceful Docker shutdown
     signal.signal(signal.SIGTERM, _signal_handler)
     signal.signal(signal.SIGINT,  _signal_handler)

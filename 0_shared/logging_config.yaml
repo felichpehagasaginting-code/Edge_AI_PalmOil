@@ -1,0 +1,184 @@
+"""
+FILE: 0_shared/logging_config.yaml
+PROJECT: Edge AI Palm Oil FFB (TBS) Grading System — Logging Configuration
+DESCRIPTION:
+  YAML configuration for the centralized logging system.
+  Can be used across all components.
+
+USAGE:
+  from config_loader import load_logging_config
+  config = load_logging_config()
+"""
+
+# Logging System Configuration
+logging:
+  # Global settings
+  enabled: true
+  log_level: "INFO"  # DEBUG, INFO, WARNING, ERROR, CRITICAL
+  
+  # File logging
+  file:
+    enabled: true
+    directory: "logs"
+    max_size_mb: 10
+    backup_count: 10
+    format: "json"  # json or text
+  
+  # Console logging
+  console:
+    enabled: true
+    level: "INFO"
+    format: "json"  # json or text
+  
+  # Structured logging
+  structured:
+    enabled: true
+    include_context: true
+    include_performance: true
+
+
+# Error Tracking Configuration
+error_tracking:
+  enabled: true
+  
+  # Alert thresholds
+  alerts:
+    error_spike_count: 10
+    error_spike_window_seconds: 60
+    repeated_error_count: 5
+    repeated_error_window_seconds: 300
+  
+  # Error persistence
+  persistence:
+    enabled: true
+    batch_size: 100
+    flush_interval_seconds: 30
+  
+  # Error retention
+  retention:
+    days: 30
+    cleanup_interval_hours: 6
+
+
+# Performance Monitoring Configuration
+performance:
+  enabled: true
+  
+  # Metrics collection
+  collection:
+    enabled: true
+    retention_hours: 24
+    
+    # SLA configuration
+    sla:
+      database_query_latency_ms: 100
+      api_response_latency_ms: 200
+      mqtt_message_latency_ms: 500
+      min_success_rate: 0.99
+  
+  # Throughput tracking
+  throughput:
+    enabled: true
+    sampling_interval_seconds: 60
+
+
+# Database Configuration for Logging
+database:
+  enabled: true
+  host: "timescaledb"
+  port: 5432
+  name: "grading_db"
+  user: "tbs_user"
+  password: "secure_db_pass_123"
+  
+  # Connection pool
+  pool:
+    min_size: 2
+    max_size: 10
+    command_timeout: 10
+  
+  # Tables to create
+  tables:
+    - error_events
+    - application_logs
+    - performance_metrics
+    - component_health
+    - system_alerts
+
+
+# Component Health Configuration
+health_check:
+  enabled: true
+  
+  # Check intervals (seconds)
+  check_interval: 60
+  
+  # Health thresholds
+  thresholds:
+    critical_error_count: 1
+    error_count_threshold: 5
+    warning_count_threshold: 10
+  
+  # Components to monitor
+  components:
+    - api_server
+    - mqtt_to_db
+    - edge_device
+    - database
+    - mqtt_broker
+
+
+# Alerting Configuration
+alerting:
+  enabled: true
+  
+  # Alert channels
+  channels:
+    log:
+      enabled: true
+      level: "WARNING"
+    
+    database:
+      enabled: true
+      
+    webhook:
+      enabled: false
+      url: "http://alerting-service/webhooks/alerts"
+      timeout: 5
+  
+  # Alert routing by severity
+  routing:
+    critical:
+      channels: [log, database, webhook]
+      notify_delay_seconds: 0
+    
+    error:
+      channels: [log, database]
+      notify_delay_seconds: 5
+    
+    warning:
+      channels: [log, database]
+      notify_delay_seconds: 30
+
+
+# Data Retention Policy
+retention:
+  error_events:
+    days: 30
+    archive: false
+  
+  application_logs:
+    days: 14
+    archive: false
+  
+  performance_metrics:
+    days: 7
+    archive: false
+  
+  system_alerts:
+    days: 30
+    archive: false
+  
+  component_health:
+    days: 30
+    archive: false

@@ -1,0 +1,30 @@
+"""
+FILE: 0_shared/requirements.txt
+PROJECT: Error Tracking and Logging System — Python Dependencies
+DESCRIPTION:
+  Python package requirements for the logging and error tracking system.
+  These packages are already required by the main system, so no additional
+  dependencies are needed for the logging system.
+
+INSTALLATION:
+  pip install -r requirements.txt
+"""
+
+# Core dependencies (already in main system)
+asyncpg>=0.27.0          # Async PostgreSQL driver
+paho-mqtt>=1.6.1         # MQTT client library
+pyyaml>=6.0              # YAML configuration parsing
+python-dateutil>=2.8.2   # Date/time utilities
+
+# Optional dependencies for enhanced features
+# (uncomment as needed)
+
+# For Elasticsearch integration (future feature)
+# elasticsearch>=8.0.0
+
+# For advanced metrics
+# prometheus-client>=0.15.0
+
+# For distributed tracing
+# opentelemetry-api>=1.15.0
+# opentelemetry-sdk>=1.15.0

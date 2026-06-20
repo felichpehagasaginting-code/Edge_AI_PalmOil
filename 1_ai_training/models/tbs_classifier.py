@@ -1,3 +1,4 @@
+"""CNN model for MAX78000-based Palm Oil FFB grading."""
 ###############################################################################
 # FILE: models/tbs_classifier.py
 # PROJECT: Edge AI Palm Oil FFB (TBS) Grading System
@@ -80,7 +81,12 @@ class TBSClassifier(nn.Module):
     maintaining representational capacity.
     """
 
-    def __init__(self, num_classes: int = 4, bias: bool = False, **kwargs) -> None:
+    def __init__(
+        self,
+        num_classes: int = 4,
+        bias: bool = False,
+        **kwargs,
+    ) -> None:
         """
         Args:
             num_classes: Number of output classes. Default 4 for FFB grading.
@@ -118,12 +124,14 @@ class TBSClassifier(nn.Module):
             **kwargs
         )
 
-        # ── Block 3: Downsampling + feature expansion ─────────────────────────
+        # ── Block 3: Downsampling + feature expansion ─────────
         # FusedMaxPoolConv2dBNReLU: applies MaxPool(2x2) THEN Conv2d in one
         # HW pass — critical for saving CNN accelerator cycles.
-        # Input: (B, 32, 128, 128) → MaxPool → (B,32,64,64) → Conv → (B,64,63,63)
+        # Input: (B, 32, 128, 128) → MaxPool
+        #   → (B,32,64,64) → Conv → (B,64,63,63)
         # Note: With pool_size=2 and padding=0 on the conv, output is 63x63
-        #       because: floor((64 - 3 + 2*0)/1) + 1 = 62 → use padding=1 for 64x64
+        #   floor((64 - 3 + 2*0)/1) + 1 = 62
+        #   → use padding=1 for 64x64
         self.block3_pool_conv = ai8x.FusedMaxPoolConv2dBNReLU(
             in_channels=32,
             out_channels=64,
@@ -163,7 +171,7 @@ class TBSClassifier(nn.Module):
             **kwargs
         )
 
-        # ── Block 5: Second downsampling pass ─────────────────────────────────
+        # ── Block 5: Second downsampling pass ─────────────────
         # Input: (B, 64, 64, 64) → Pool → (B,64,32,32) → Conv → (B,64,32,32)
         self.block5_pool_conv = ai8x.FusedMaxPoolConv2dBNReLU(
             in_channels=64,
@@ -190,13 +198,14 @@ class TBSClassifier(nn.Module):
         )
 
         # ── Global Average Pooling ────────────────────────────────────────────
-        # Collapses (B, 64, 32, 32) → (B, 64, 1, 1) before the classifier.
+        # Collapses (B, 64, 32, 32) → (B, 64, 1, 1) before
+        # the classifier head.
         # Preferred over Flatten for spatial invariance and lower param count.
         self.global_avg_pool = nn.AdaptiveAvgPool2d((1, 1))
 
         # ── Classifier Head ───────────────────────────────────────────────────
         # Maps the 64-dim feature vector to 4 class logits.
-        # Note: ai8x.Linear wraps nn.Linear with quantization awareness.
+        # ai8x.Linear wraps nn.Linear with quantization.
         self.classifier = ai8x.Linear(
             in_features=64,
             out_features=num_classes,
@@ -245,14 +254,14 @@ class TBSClassifier(nn.Module):
         x = self.block2_conv(x)      # (B, 16, 128, 128) → (B, 32, 128, 128)
 
         # ── First Downsampling (2x) ────────────────────────────────────────
-        x = self.block3_pool_conv(x) # (B, 32, 128, 128) → (B, 64,  64,  64)
+        x = self.block3_pool_conv(x)  # → (B, 64,  64,  64)
 
         # ── Depthwise Separable Block ──────────────────────────────────────
         x = self.block4a_dw(x)       # (B, 64,  64,  64) → (B, 64,  64,  64)
         x = self.block4b_pw(x)       # (B, 64,  64,  64) → (B, 64,  64,  64)
 
         # ── Second Downsampling (2x) ───────────────────────────────────────
-        x = self.block5_pool_conv(x) # (B, 64,  64,  64) → (B, 64,  32,  32)
+        x = self.block5_pool_conv(x)  # → (B, 64,  32,  32)
 
         # ── Final Refinement ───────────────────────────────────────────────
         x = self.block6_dw(x)        # (B, 64,  32,  32) → (B, 64,  32,  32)
@@ -302,7 +311,10 @@ def tbs_classifier(pretrained: bool = False, **kwargs) -> TBSClassifier:
 # Run standalone to verify the model stays within 442 KB hardware limit.
 ###############################################################################
 
-def _check_weight_budget(model: nn.Module, limit_kb: float = 442.0) -> None:
+def _check_weight_budget(
+    net: nn.Module,
+    limit_kb: float = 442.0,
+) -> None:
     """
     Calculates the approximate INT8 weight budget and compares to HW limit.
 
@@ -310,19 +322,25 @@ def _check_weight_budget(model: nn.Module, limit_kb: float = 442.0) -> None:
         model:    Instantiated model (weights in float32 during training).
         limit_kb: Hardware CNN weight memory limit in KB. Default: 442 KB.
     """
-    total_params = sum(p.numel() for p in model.parameters() if p.requires_grad)
+    total_params = sum(
+        p.numel() for p in net.parameters() if p.requires_grad
+    )
     # INT8 = 1 byte per parameter
     size_bytes = total_params * 1  # 1 byte/param for INT8 post-QAT
     size_kb = size_bytes / 1024.0
 
     print("=" * 60)
-    print(f"  TBSClassifier Weight Budget Report")
+    print("  TBSClassifier Weight Budget Report")
     print("=" * 60)
     print(f"  Trainable parameters : {total_params:,}")
     print(f"  Estimated INT8 size  : {size_kb:.2f} KB")
     print(f"  Hardware limit       : {limit_kb:.2f} KB")
     print(f"  Budget remaining     : {limit_kb - size_kb:.2f} KB")
-    status = "✓ WITHIN BUDGET" if size_kb <= limit_kb else "✗ EXCEEDS BUDGET — reduce channels!"
+    status = (
+        "✓ WITHIN BUDGET"
+        if size_kb <= limit_kb
+        else "✗ EXCEEDS BUDGET — reduce channels!"
+    )
     print(f"  Status               : {status}")
     print("=" * 60)
 

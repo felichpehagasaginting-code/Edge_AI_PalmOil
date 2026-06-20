@@ -54,10 +54,8 @@
 #include <stdbool.h>
 
 /* MSDK system includes */
-#include "mxc_device.h"
 #include "mxc_sys.h"
 #include "mxc_delay.h"
-#include "nvic_table.h"
 #include "gpio.h"
 #include "uart.h"           /* MSDK UART driver — needed for RX FIFO functions */
 #include "led.h"            /* On-board LED for status indication */
@@ -97,9 +95,15 @@
  *           Matang          → LED1 Green ON
  *           Mentah          → LED0 + LED1 (Yellow = Red + Green)
  */
+#ifndef LED_RED
 #define LED_RED             0   /* LED0: Red  */
+#endif
+#ifndef LED_GREEN
 #define LED_GREEN           1   /* LED1: Green */
+#endif
+#ifndef LED_BLUE
 #define LED_BLUE            2   /* LED2: Blue  — scan-in-progress indicator */
+#endif
 #define LED_SCAN_INDICATOR  LED_BLUE
 #define LED_ERROR_INDICATOR LED_RED
 

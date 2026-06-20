@@ -11,6 +11,19 @@
 ```
 IoT_Grad_Scanner/
 │
+├── 0_shared/                         # Common Utilities & Shared Libraries
+│   ├── config_loader.py              # Configuration manager
+│   ├── database_schema.sql           # Shared SQL Database definition
+│   ├── db_logging.py                 # SQLite/PostgreSQL logger
+│   ├── demo_system.py                # Full integration test demo
+│   ├── error_tracker.py              # Robust diagnostic & error handler
+│   ├── logger_config.py              # Python logging utility
+│   ├── logging_config.yaml           # YAML configuration for logger
+│   ├── performance_monitor.py        # System performance profiling tool
+│   ├── requirements.txt              # Shared requirements
+│   ├── QUICK_REFERENCE.md            # Quick reference guide
+│   └── README_LOGGING_SYSTEM.md      # Detailed system integration guide
+│
 ├── 1_ai_training/                    # Python AI Training Pipeline
 │   ├── models/
 │   │   └── tbs_classifier.py         # ai8x CNN model (< 442 KB weights)
@@ -29,7 +42,7 @@ IoT_Grad_Scanner/
 │   │   └── uart_comm.h               # UART + buzzer API
 │   ├── src/
 │   │   ├── main.c                    # Central control loop
-│   │   ├── camera.c                  # OV7692 + DMA driver
+│   │   ├── cam_ov7692.c              # OV7692 camera driver implementation
 │   │   ├── preprocess.c              # RGB565→INT8 normalization
 │   │   ├── cnn_inference.c           # CNN HW inference + softmax
 │   │   └── uart_comm.c               # JSON TX + buzzer GPIO
@@ -61,10 +74,14 @@ IoT_Grad_Scanner/
 └── 5_web_dashboard/                  # Custom Real-Time Web Dashboard
     ├── backend/
     │   ├── api_server.py             # FastAPI REST API → TimescaleDB
+    │   ├── api_server_monitoring_integration.py # API monitoring setup
+    │   ├── monitoring_api.py         # Monitoring endpoints
     │   ├── requirements.txt
     │   └── Dockerfile
     ├── frontend/
     │   ├── index.html                # Dashboard SPA
+    │   ├── monitoring.html           # Diagnostics Dashboard Page
+    │   ├── monitoring.js             # Diagnostics Dashboard Frontend Logic
     │   ├── css/dashboard.css         # Dark industrial theme
     │   └── js/
     │       ├── config.js             # Dashboard configuration
@@ -72,7 +89,10 @@ IoT_Grad_Scanner/
     │       ├── charts.js             # Chart.js visualizations
     │       ├── indicators.js         # LED & card indicators
     │       └── dashboard.js          # Main orchestrator
-    └── nginx.conf                    # Frontend + API reverse proxy
+    ├── nginx.conf                    # Frontend + API reverse proxy
+    ├── IMPLEMENTATION_UI_COMPLETE.txt
+    ├── MONITORING_DASHBOARD_GUIDE.md
+    └── MONITORING_UI_SUMMARY.md
 ```
 
 ---
@@ -645,6 +665,31 @@ docker stats                          # CPU & memory usage
 | `pks/grading/tbs/result` | 1 | ESP→Broker | Scan results |
 | `pks/grading/tbs/status` | 0 | ESP→Broker | 30s heartbeat |
 | `pks/grading/tbs/cmd` | 1 | Broker→ESP | Commands (reboot, status) |
+
+---
+
+## 📊 Sistem Monitoring Diagnostik & Error Tracking (`0_shared`)
+
+Sistem ini memiliki modul diagnostik, logging terstruktur, pelacakan performa (SLA), dan manajemen alert terintegrasi yang memantau kesehatan seluruh ekosistem IoT secara real-time.
+
+### Fitur Utama:
+1. **Structured JSON Logging (`logger_config.py`)**: Format log terstruktur untuk mempermudah indexing dan monitoring.
+2. **Error Tracker & Alerts (`error_tracker.py`)**: Deteksi otomatis lonjakan error (spikes), pengkategorian tingkat keparahan (severity), dan error berulang.
+3. **Performance Profiling & SLA (`performance_monitor.py`)**: Pengukuran latensi kueri database dan respons API untuk mendeteksi degradasi performa.
+4. **Database Persistence (`db_logging.py`)**: Log, error, performa, dan alert disimpan langsung ke TimescaleDB hypertable untuk analisis jangka panjang.
+5. **Diagnostics Dashboard UI (`monitoring.html` & `monitoring.js`)**: Halaman khusus di dashboard web untuk memantau kesehatan tiap komponen sistem secara real-time dengan pembaruan otomatis setiap 10 detik.
+
+### Cara Mengakses Diagnostics Dashboard:
+Setelah server backend Docker berjalan (Tahap 5):
+```
+http://<IP-SERVER-FACTORY>/monitoring
+```
+Anda dapat memantau beberapa tab:
+- **Overview**: Status kesehatan sistem, tren error 60 menit terakhir, status per komponen.
+- **Errors**: Tabel detail error dengan pencarian dan filter komponen/severity.
+- **Alerts**: Daftar peringatan aktif dengan tombol aksi Acknowledge.
+- **Components**: Status detail error count & info error terakhir per komponen.
+- **Performance**: Grafik visualisasi rata-rata latensi API/DB vs target SLA.
 
 ---
 
